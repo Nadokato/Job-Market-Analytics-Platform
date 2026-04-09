@@ -11,18 +11,19 @@ export default function LoginPage() {
       
       {/* --- HEADER --- */}
       <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
             <BarChart2 size={24} className="text-blue-400" />
           </div>
-          <span className="font-bold text-2xl text-slate-800 tracking-tight">
+          <span className="font-bold text-2xl text-slate-800">
             Career<span className="text-blue-600">Intel</span>
+            <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
           </span>
-        </div>
+        </Link>
         
         <Link href="/">
             <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition">
-              Trang chủ
+              Home
             </button>
         </Link>
       </nav>
@@ -31,8 +32,8 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center py-16 px-4 z-10">
         <div className="bg-white p-10 rounded-3xl shadow-[0_15px_60px_-15px_rgba(0,0,0,0.1)] w-full max-w-md">
           
-          <h2 className="text-3xl font-bold mb-2 text-center text-slate-900">Chào mừng trở lại</h2>
-          <p className="text-gray-500 text-center mb-8 font-light">Đăng nhập để tiếp tục quản lý sự nghiệp của bạn</p>
+          <h2 className="text-3xl font-bold mb-2 text-center text-slate-900">welcome back</h2>
+          <p className="text-gray-500 text-center mb-8 font-light">Login to continue managing your career</p>
           
           <form className="space-y-5">
             <div className="space-y-1">
@@ -47,8 +48,8 @@ export default function LoginPage() {
 
             <div className="space-y-1">
               <div className="flex justify-between items-center">
-                <label className="block text-sm font-semibold text-slate-800">Mật khẩu</label>
-                <a href="#" className="text-xs text-blue-600 hover:underline">Quên mật khẩu?</a>
+                <label className="block text-sm font-semibold text-slate-800">password</label>
+                <a href="#" className="text-xs text-blue-600 hover:underline">Forgot password?</a>
               </div>
               <input 
                 type="password" 
@@ -59,15 +60,15 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" className="w-full bg-[#2463eb] text-white p-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-md">
-              Đăng nhập
+              Log in
             </button>
           </form>
 
           <div className="mt-8 text-center">
             <p className="text-gray-600">
-              Chưa có tài khoản?{' '}
+              Don't have an account?{' '}
               <Link href="/signup" className="text-[#f27a42] font-semibold hover:underline">
-                Đăng ký ngay
+                Sign up now
               </Link>
             </p>
           </div>

@@ -21,13 +21,6 @@ export default function SignUpPage() {
           </span>
         </div>
         
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <a href="#" className="hover:text-blue-600 transition">Job Search</a>
-          <a href="#" className="hover:text-blue-600 transition">Market Insights</a>
-          <a href="#" className="hover:text-blue-600 transition">AI Assistant</a>
-          <a href="#" className="hover:text-blue-600 transition">My Profile</a>
-        </div>
-        
         {/* Nút Đăng ký màu cam được thay bằng link quay lại trang chủ */}
         <Link href="/">
             <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
@@ -42,16 +35,16 @@ export default function SignUpPage() {
         {/* Container cho Form: Đã được mở rộng ra kích thước max-w-xl để trông chuyên nghiệp */}
         <div className="bg-white p-12 rounded-3xl shadow-[0_15px_60px_-15px_rgba(0,0,0,0.1)] w-full max-w-xl transition-all duration-300">
           
-          <h2 className="text-4xl font-bold mb-3 text-center text-slate-900 tracking-tight">Tạo tài khoản</h2>
+          <h2 className="text-4xl font-bold mb-3 text-center text-slate-900 tracking-tight">Create Account</h2>
           <p className="text-gray-600 text-center text-lg mb-10 font-light">
-            Cung cấp thông tin để bắt đầu hành trình sự nghiệp thông minh của bạn.
+            Provide your information
           </p>
           
           <form className="space-y-6">
             
             {/* Các Input Fields được mở rộng full width */}
             <div className="space-y-1">
-              <label className="block text-sm font-semibold text-slate-800">Họ và Tên</label>
+              <label className="block text-sm font-semibold text-slate-800">Name</label>
               <input type="text" className="w-full p-4 bg-white text-black border placeholder:text-gray-400 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" placeholder="Nguyễn Văn A" required />
             </div>
 
@@ -61,24 +54,24 @@ export default function SignUpPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="block text-sm font-semibold text-slate-800">Mật khẩu</label>
+              <label className="block text-sm font-semibold text-slate-800">Password</label>
               <input type="password" className="w-full p-4 bg-white text-black border placeholder:text-gray-400 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" placeholder="••••••••" required />
             </div>
 
             <div className="flex items-start gap-3 pt-2">
                 <input type="checkbox" className="w-5 h-5 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" required />
-                <label className="text-sm text-gray-600">Tôi đồng ý với các <a href="#" className="text-blue-600 font-medium hover:underline">Điều khoản Dịch vụ</a> và <a href="#" className="text-blue-600 font-medium hover:underline">Chính sách Bảo mật</a>.</label>
+                <label className="text-sm text-gray-600">I agree to the <a href="#" className="text-blue-600 font-medium hover:underline">Terms of Service</a> and <a href="#" className="text-blue-600 font-medium hover:underline">Privacy Policy</a>.</label>
             </div>
 
             {/* Nút Đăng ký màu cam, kích thước chuẩn */}
             <button type="submit" className="w-full bg-[#f27a42] text-black p-4 rounded-xl font-bold text-lg hover:bg-[#e06830] transition duration-200 shadow-md">
-              Đăng ký ngay
+              sign up now
             </button>
           </form>
 
           {/* Dòng text dưới form */}
           <p className="mt-10 text-center text-gray-600 text-base font-light">
-            Bạn đã có tài khoản? <Link href="/login" className="text-blue-600 font-semibold hover:underline">Đăng nhập ngay</Link>
+            Do you already have an account? <Link href="/login" className="text-blue-600 font-semibold hover:underline">Login now</Link>
           </p>
 
         </div>
