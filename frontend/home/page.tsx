@@ -4,8 +4,9 @@ import Link from 'next/link';
 import React from 'react';
 import { Search, MapPin, BarChart2 } from 'lucide-react';
 import { FaFacebook, FaTwitter, FaYoutube } from 'react-icons/fa';
+import { logout } from '@/backend/auth/actions';
 
-export default function HomePage() {
+export default function HomePage({ user }: { user?: any }) {
   return (
     <div className="min-h-screen font-sans bg-gray-50 flex flex-col relative overflow-hidden">
 
@@ -22,23 +23,39 @@ export default function HomePage() {
         </div>
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <a href="#" className="hover:text-blue-600 transition">Job Search</a>
+          <a href="/search" className="hover:text-blue-600 transition">Job Search</a>
           <a href="#" className="hover:text-blue-600 transition">Market Insights</a>
           <a href="#" className="hover:text-blue-600 transition">AI Assistant</a>
           <a href="#" className="hover:text-blue-600 transition">My Profile</a>
         </div>
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="/signup">
-            <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
-              Sign Up
-            </button>
-          </Link>
-          <Link href="/login">
-            <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
-              Log In
-            </button>
-          </Link>
+          {user ? (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <span>Hi, {user.user_metadata?.full_name || 'User'}</span>
+              </div>
+              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block cursor-pointer">
+                Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/signup">
+                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
+                  Sign Up
+                </button>
+              </Link>
+              <Link href="/login">
+                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
+                  Log In
+                </button>
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
