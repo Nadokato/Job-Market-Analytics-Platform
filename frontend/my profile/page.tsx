@@ -25,7 +25,7 @@ export default function MyProfile({ user }: { user?: any }) {
     <div className="bg-[#f4f2ee] min-h-screen pb-10 text-[#000000e6]">
       {/* --- HEADER / NAVBAR --- */}
       <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
             <BarChart2 size={24} className="text-blue-400" />
           </div>
@@ -33,15 +33,15 @@ export default function MyProfile({ user }: { user?: any }) {
             Career<span className="text-blue-600">Intel</span>
             <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
           </span>
-        </div>
-
+        </Link>
+        
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="/search" className="hover:text-blue-600 transition">Job Search</Link>
+          <Link href="//search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
           <Link href="#" className="hover:text-blue-600 transition">Market Insights</Link>
           <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
-          <Link href="/profile" className="hover:text-blue-600 transition text-blue-600 border-b-2 border-blue-600 pb-1">My Profile</Link>
+          <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
         </div>
-
+        
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           {user ? (
             <>

@@ -1,27 +1,116 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { 
-  Search, MapPin, Briefcase, ChevronDown, 
-  ChevronLeft, ChevronRight, BarChart2 
+import {
+  Search, MapPin, Briefcase, ChevronDown,
+  ChevronLeft, ChevronRight, BarChart2
 } from 'lucide-react';
 import { logout } from '@/backend/auth/actions';
 
-const mockJobs = [
-  { id: 1, title: "Nhân Viên Telesale/Tư Vấn Bảo Hiểm Chăm Sóc Sức Khỏe", company: "CÔNG TY TNHH ALWAYS CARE", salary: "7 - 9 triệu VND + HH", location: "Hồ Chí Minh", hot: true },
-  { id: 2, title: "Giám Sát Kỹ Thuật Hiện Trường (Không Yêu Cầu Kinh Nghiệm)", company: "CÔNG TY CỔ PHẦN ALUMAX VIỆT NAM", salary: "7 triệu VND + PC", location: "Hà Nội", hot: true },
-  { id: 3, title: "Nhân Viên Kinh Doanh/Sale/Tư Vấn - Lương Cứng Tốt", company: "CÔNG TY CỔ PHẦN DKRA VEGA", salary: "40 - 65 triệu VND", location: "Hồ Chí Minh", hot: true },
-  { id: 4, title: "Cán Bộ An Toàn Lao Động (Làm Việc Tại Công Trình)", company: "CÔNG TY CỔ PHẦN ALUMAX VIỆT NAM", salary: "15 - 18 triệu VND", location: "Hà Nội", hot: true },
-  { id: 5, title: "Nhân Viên Kinh Doanh Bất Động Sản - Thu Nhập Hấp Dẫn", company: "CÔNG TY CỔ PHẦN ĐẦU TƯ VIỆT Á LAND", salary: "50 - 200 Triệu VND", location: "Hồ Chí Minh", hot: true },
-  { id: 6, title: "Service Engineer - Kỹ Sư Tự Động Hóa", company: "CÔNG TY TNHH ISHIDA VIỆT NAM", salary: "Thỏa thuận", location: "Hồ Chí Minh", hot: true },
-];
 
-export default function JobSearchPage({ user }: { user?: any }) {
+
+// Hàm kiểm tra thẻ rỗng / không có thông tin
+const isValidInfo = (val?: string) => {
+  if (!val) return false;
+  const lower = val.toLowerCase().trim();
+  if (
+    lower === 'n/a' ||
+    lower === 'không có thông tin' ||
+    lower === 'không yêu cầu' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === '-' ||
+    lower === ''
+  ) return false;
+  return true;
+};
+
+const hasNoiseContent = (val?: string) => {
+  const text = (val || '').toLowerCase();
+  const noiseFragments = [
+    'gross - net',
+    'tính thuế thu nhập cá nhân',
+    'tính bảo hiểm thất nghiệp',
+    'tool check chống lừa đảo',
+    'cẩm nang nghề nghiệp',
+    'career insights',
+  ];
+  return noiseFragments.some((fragment) => text.includes(fragment));
+};
+
+const sanitizeDisplayValue = (val?: string) => {
+  if (!isValidInfo(val)) return 'N/A';
+  if (hasNoiseContent(val)) return 'N/A';
+  return (val || '').replace(/\s+/g, ' ').trim();
+};
+
+export default function JobSearchPage({ user, jobs = [] }: { user?: any, jobs?: any[] }) {
+  const [keyword, setKeyword] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+
+  // Đồng bộ dữ liệu tuyển dụng, tránh trùng nhau theo url hoặc title-company
+  const displayJobs = useMemo(() => {
+    const merged = [...jobs];
+    const seen = new Set<string>();
+
+    return merged.filter((job, idx) => {
+      const title = (job.tieu_de || job.title || '').trim().toLowerCase();
+      const company = (job.cong_ty || job.company || '').trim().toLowerCase();
+      const url = (job.url || '').trim().toLowerCase();
+      const key = url || `${title}-${company}-${job.dia_diem || job.location || ''}-${idx}`;
+
+      if (!isValidInfo(key)) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [jobs]);
+
+  const locations = useMemo(() => {
+    return Array.from(
+      new Set(
+        displayJobs
+          .map((job) => (job.dia_diem || job.location || '').trim())
+          .filter((location) => isValidInfo(location))
+      )
+    );
+  }, [displayJobs]);
+
+  const categories = useMemo(() => {
+    return Array.from(
+      new Set(
+        displayJobs
+          .map((job) => (job.nganh_nghe || '').trim())
+          .filter((category) => isValidInfo(category))
+      )
+    );
+  }, [displayJobs]);
+
+  const filteredJobs = useMemo(() => {
+    const keywordLower = keyword.trim().toLowerCase();
+
+    return displayJobs.filter((job) => {
+      const title = (job.tieu_de || job.title || '').toLowerCase();
+      const company = (job.cong_ty || job.company || '').toLowerCase();
+      const location = (job.dia_diem || job.location || '').trim();
+      const category = (job.nganh_nghe || '').trim();
+
+      const matchKeyword = !keywordLower || title.includes(keywordLower) || company.includes(keywordLower);
+      const matchLocation = !selectedLocation || location === selectedLocation;
+      const matchCategory = !selectedCategory || category === selectedCategory;
+
+      return matchKeyword && matchLocation && matchCategory;
+    });
+  }, [displayJobs, keyword, selectedLocation, selectedCategory]);
+
+  const isExternalJobUrl = (url?: string) => typeof url === 'string' && /^https?:\/\//i.test(url);
+
   return (
     <div className="min-h-screen bg-[#f4f2ee] font-sans flex flex-col">
-      
-      {/* --- HEADER (Giống hệt trang chủ CareerIntel) --- */}
+
+      {/* --- HEADER --- */}
       <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
@@ -32,14 +121,14 @@ export default function JobSearchPage({ user }: { user?: any }) {
             <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
           </span>
         </Link>
-        
+
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="//search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
+          <Link href="/search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
           <Link href="#" className="hover:text-blue-600 transition">Market Insights</Link>
           <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
           <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
         </div>
-        
+
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           {user ? (
             <>
@@ -71,28 +160,36 @@ export default function JobSearchPage({ user }: { user?: any }) {
       </nav>
 
       {/* --- BỘ LỌC TÌM KIẾM --- */}
-      {/* Đổi màu nền sang tone xanh đậm đồng bộ với trang chủ */}
       <div className="bg-[#1a4b6b] py-6 px-4 md:px-12 w-full shadow-inner">
         <div className="max-w-5xl mx-auto">
           {/* Thanh tìm kiếm chính */}
           <div className="bg-white p-1.5 rounded-lg flex flex-col md:flex-row items-center gap-2 shadow-md">
             <div className="flex-1 flex items-center px-3 py-2 w-full">
               <Search className="text-gray-400 mr-2" size={20} />
-              <input 
-                type="text" 
-                placeholder="Từ khóa, chức danh hoặc công ty" 
+              <input
+                type="text"
+                placeholder="Từ khóa, chức danh hoặc công ty"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
                 className="w-full outline-none text-slate-800 placeholder-gray-400 bg-transparent"
               />
             </div>
-            
+
             <div className="hidden md:block w-px h-8 bg-gray-200"></div>
-            
+
             <div className="w-full md:w-56 flex items-center px-3 py-2">
               <MapPin className="text-gray-400 mr-2" size={20} />
-              <select className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none">
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
+              >
                 <option value="">Địa điểm</option>
-                <option value="hn">Hà Nội</option>
-                <option value="hcm">Hồ Chí Minh</option>
+                {locations.map((location) => (
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="text-gray-400" size={16} />
             </div>
@@ -101,20 +198,34 @@ export default function JobSearchPage({ user }: { user?: any }) {
 
             <div className="w-full md:w-56 flex items-center px-3 py-2">
               <Briefcase className="text-gray-400 mr-2" size={20} />
-              <select className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
+              >
                 <option value="">Ngành nghề</option>
-                <option value="it">IT - Phần mềm</option>
-                <option value="kinhdoanh">Kinh doanh / Bán hàng</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="text-gray-400" size={16} />
             </div>
 
-            <button className="w-full md:w-auto bg-[#2463eb] hover:bg-blue-700 text-white px-8 py-3 rounded-md font-bold transition">
-              TÌM VIỆC
+            <button
+              onClick={() => {
+                setKeyword('');
+                setSelectedLocation('');
+                setSelectedCategory('');
+              }}
+              className="w-full md:w-auto bg-[#2463eb] hover:bg-blue-700 text-white px-8 py-3 rounded-md font-bold transition"
+            >
+              XÓA TÌM KIẾM
             </button>
           </div>
 
-          {/* Các bộ lọc phụ (Sub-filters) */}
+          {/* Các bộ lọc phụ */}
           <div className="flex flex-wrap gap-2 mt-4">
             {['Tất cả thời gian', 'Tất cả loại hình', 'Mức lương', 'Tất cả cấp bậc', 'Tất cả kinh nghiệm'].map((filter, index) => (
               <button key={index} className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-sm px-4 py-2 rounded-md flex items-center gap-1 transition">
@@ -128,55 +239,97 @@ export default function JobSearchPage({ user }: { user?: any }) {
         </div>
       </div>
 
-      {/* --- MAIN CONTENT AREA (1 CỘT DUY NHẤT) --- */}
-      {/* Thu hẹp max-w-5xl để khi hiển thị 1 dòng trông không bị quá loãng */}
+      {/* --- MAIN CONTENT AREA --- */}
       <div className="max-w-5xl mx-auto w-full px-4 md:px-12 py-10 flex-1">
-        
         <div className="w-full">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-slate-800">Kết quả tìm kiếm phù hợp</h2>
+            <h2 className="text-2xl font-bold text-slate-800">
+              Kết quả tìm kiếm phù hợp
+              <span className="text-sm font-normal text-gray-500 ml-2">
+                ({filteredJobs.length} công việc)
+              </span>
+            </h2>
             <div className="flex gap-2">
               <button className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm"><ChevronLeft size={18} /></button>
               <button className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm"><ChevronRight size={18} /></button>
             </div>
           </div>
 
-          {/* Danh sách Việc làm - Dạng flex-col (1 dòng 1 mục) */}
+          {/* Danh sách Việc làm */}
           <div className="flex flex-col gap-4">
-            {mockJobs.map((job) => (
-              <div key={job.id} className="bg-white p-5 rounded-xl border border-gray-200 hover:border-blue-500 hover:shadow-lg transition duration-200 cursor-pointer flex flex-col md:flex-row gap-5 items-start md:items-center justify-between group">
-                
-                <div className="flex gap-5 items-center w-full md:w-auto flex-1">
-                  {/* Khung Logo Công ty */}
-                  <div className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <span className="font-bold text-gray-400 text-xs text-center">{job.company.substring(0, 4)}</span>
-                  </div>
-                  
-                  {/* Thông tin việc làm */}
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition">
-                      {job.hot && <span className="inline-block bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded font-bold mr-2 align-middle">HOT</span>}
-                      {job.title}
-                    </h3>
-                    <p className="text-sm text-gray-500 truncate uppercase font-medium">{job.company}</p>
-                  </div>
-                </div>
+            {filteredJobs.map((job, idx) => {
+              // Hỗ trợ cả property của mock data và data cào về
+              const title = sanitizeDisplayValue(job.tieu_de || job.title);
+              const company = sanitizeDisplayValue(job.cong_ty || job.company);
+              const salary = sanitizeDisplayValue(job.muc_luong || job.salary);
+              const location = sanitizeDisplayValue(job.dia_diem || job.location);
+              const category = job.nganh_nghe;
+              const exp = job.kinh_nghiem_lam_viec;
+              const logo = job.logo || job.logo_url;
+              const expireDate = sanitizeDisplayValue(job.thong_tin_tuyen_dung?.het_han_nop);
+              const jobKey = job.url || `${title || 'job'}-${company || 'company'}-${idx}`;
 
-                {/* Cột Mức lương & Địa điểm (Đẩy sang bên phải màn hình) */}
-                <div className="flex flex-col md:items-end w-full md:w-auto mt-2 md:mt-0 pl-21 md:pl-0">
-                  <p className="text-base font-bold text-[#f27a42] mb-1">{job.salary}</p>
-                  <p className="text-sm text-gray-500 flex items-center gap-1.5 font-medium">
-                    <MapPin size={14} className="text-gray-400" /> {job.location}
-                  </p>
-                </div>
+              return (
+                <Link key={jobKey} href={`/job/${encodeURIComponent(encodeURIComponent(jobKey))}`} className="block group">
+                  <div className="bg-white px-4 py-3 rounded-lg border border-blue-200 group-hover:border-blue-400 group-hover:shadow-md transition duration-200 flex gap-4 items-start">
+                    {/* Khung Logo Công ty */}
+                    <div className="w-14 h-14 bg-white rounded flex items-center justify-center flex-shrink-0 mt-1">
+                      {isExternalJobUrl(logo) ? (
+                        <img
+                          src={logo}
+                          alt={isValidInfo(company) ? company : 'Company logo'}
+                          className="w-full h-full object-contain rounded-lg"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="font-bold text-gray-400 text-xs text-center">
+                          {company ? company.substring(0, 4) : "LOGO"}
+                        </span>
+                      )}
+                    </div>
 
+                    {/* Thông tin việc làm */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg md:text-xl font-semibold text-[#3348a7] mb-1 group-hover:text-blue-700 transition truncate">
+                        {isValidInfo(title) ? title : 'Chưa cập nhật chức danh'}
+                      </h3>
+                      {isValidInfo(company) && (
+                        <p className="text-base md:text-lg text-slate-900 truncate uppercase font-bold mb-1">
+                          {company}
+                        </p>
+                      )}
+                      <div className="flex flex-col gap-1.5 mt-1">
+                        <div className="flex items-center justify-between gap-3">
+                          {isValidInfo(salary) && (
+                            <span className="text-sm md:text-base text-slate-800 font-medium truncate">{salary}</span>
+                          )}
+                          <div className="text-[11px] md:text-xs text-gray-500 whitespace-nowrap text-right flex-shrink-0">
+                            {isValidInfo(expireDate) ? `Hết hạn: ${expireDate}` : ''}
+                          </div>
+                        </div>
+                        {isValidInfo(location) && (
+                          <div className="text-sm text-gray-500 truncate flex items-center gap-1.5">
+                            <MapPin size={14} className="flex-shrink-0" />
+                            <span className="truncate">{location}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+            
+            {filteredJobs.length === 0 && (
+              <div className="text-center py-10 bg-white rounded-xl border border-gray-200">
+                <p className="text-gray-500">Chưa có dữ liệu việc làm nào. Hãy chạy script cào dữ liệu.</p>
               </div>
-            ))}
+            )}
           </div>
 
         </div>
       </div>
-      
+
     </div>
   );
 }
