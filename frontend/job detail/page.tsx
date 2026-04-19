@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search, MapPin, Briefcase, ChevronDown,
   BarChart2, Clock, DollarSign, Award,
@@ -10,32 +10,103 @@ import {
 } from 'lucide-react';
 import { FaFacebook, FaLinkedin } from 'react-icons/fa';
 import { logout } from '@/backend/auth/actions';
-import scrapedData from '../../scraped_data.json';
 
+const CITY_PATTERNS = [
+  'Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Cần Thơ', 'Hải Phòng',
+  'Bắc Ninh', 'Bình Dương', 'Đồng Nai', 'Khánh Hòa', 'Kiên Giang',
+  'Nghệ An', 'Thanh Hóa', 'Hải Dương', 'Thái Nguyên', 'Vĩnh Phúc',
+  'Thái Bình', 'Long An', 'Tiền Giang', 'An Giang', 'Bình Định',
+  'Lâm Đồng', 'Đắk Lắk', 'Quảng Ninh', 'Quảng Nam', 'Thừa Thiên Huế',
+  'Bà Rịa - Vũng Tàu', 'Hưng Yên', 'Nam Định', 'Hà Nam', 'Ninh Bình',
+  'Phú Thọ', 'Yên Bái', 'Lào Cai', 'Sơn La', 'Điện Biên', 'Lai Châu',
+  'Hòa Bình', 'Bắc Giang', 'Lạng Sơn', 'Tuyên Quang', 'Cao Bằng',
+  'Bắc Kạn', 'Hà Giang', 'Quảng Bình', 'Quảng Trị', 'Quảng Ngãi',
+  'Bình Thuận', 'Ninh Thuận', 'Phú Yên', 'Bình Phước', 'Tây Ninh',
+  'Bến Tre', 'Trà Vinh', 'Vĩnh Long', 'Đồng Tháp', 'Hậu Giang',
+  'Sóc Trăng', 'Bạc Liêu', 'Cà Mau', 'Gia Lai', 'Kon Tum', 'Đắk Nông',
+  'Toàn quốc', 'Nước ngoài'
+].sort((a, b) => a.localeCompare(b, 'vi'));
 
+const isValidInfo = (val?: string) => {
+  if (!val) return false;
+  const lower = val.toLowerCase().trim();
+  if (
+    lower === 'n/a' || lower === 'không có thông tin' || lower === 'không yêu cầu' ||
+    lower === 'null' || lower === 'undefined' || lower === '-' || lower === ''
+  ) return false;
+  return true;
+};
 
-function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
+const splitLocations = (val?: string): string[] => {
+  if (!val) return [];
+  const cleaned = val.replace(/^(làm việc:\s*|nơi làm việc:\s*|khu vực:\s*|tại:\s*)/i, '').trim();
+  const parts = cleaned.split(/[,;]|(?<!Bà Rịa) - (?!Vũng Tàu)/).map((p) => p.trim()).filter(Boolean);
+
+  const cities: string[] = [];
+  for (const part of parts) {
+    const matched = CITY_PATTERNS.find((city) => part.toLowerCase().includes(city.toLowerCase()));
+    if (matched) {
+      if (!cities.includes(matched)) cities.push(matched);
+    } else if (part.length > 1 && part.length <= 60) {
+      const shortPart = part.split(/[()\[\]]/)[0].trim();
+      if (shortPart && !cities.includes(shortPart)) cities.push(shortPart);
+    }
+  }
+  return cities.length > 0 ? cities : (cleaned ? [cleaned] : []);
+};
+
+function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs = [] }: { user?: any, jobId?: string, initialJob?: any, relatedJobs?: any[], allJobs?: any[] }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('detail');
 
-  const currentId = jobId || searchParams.get('id');
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>();
+    (allJobs || []).forEach((j) => {
+      splitLocations(j.dia_diem || j.location || '').forEach((city) => {
+        if (isValidInfo(city)) set.add(city);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [allJobs]);
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    (allJobs || []).forEach((j) => {
+      (j.nganh_nghe || '').split(',').forEach((c: string) => { const t = c.trim(); if (t) set.add(t); });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [allJobs]);
+
+  const cleanLocation = (val?: string) => {
+    if (!val) return 'Chưa cập nhật';
+    return val.replace(/^(làm việc:\s*|nơi làm việc:\s*|khu vực:\s*|tại:\s*)/i, '').trim();
+  };
+
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
+  const [searchCategory, setSearchCategory] = useState('');
+
+  const handleSearch = () => {
+    const params = new URLSearchParams();
+    if (searchKeyword) params.set('keyword', searchKeyword);
+    if (searchLocation) params.set('location', searchLocation);
+    if (searchCategory) params.set('category', searchCategory);
+    router.push(`/search?${params.toString()}`);
+  };
 
   const job = useMemo(() => {
-    // Giải mã an toàn 2 lần để tìm được URL gốc (tránh lỗi url chứa kí tự đặc biệt)
-    let decodedId = currentId || '';
-    try { decodedId = decodeURIComponent(decodedId); } catch(e) {}
-    try { decodedId = decodeURIComponent(decodedId); } catch(e) {}
-
-    let found = scrapedData.find(j => j.url === currentId || j.url === decodedId);
+    let found = initialJob;
     if (found) {
       return {
         title: found.tieu_de || 'Chưa cập nhật',
         company: found.cong_ty || 'Chưa cập nhật',
         salary: found.muc_luong || 'Thỏa thuận',
-        location: found.dia_diem || found.thong_tin_tuyen_dung?.dia_diem_lam_viec || 'Chưa cập nhật',
+        location: cleanLocation(found.dia_diem || found.thong_tin_tuyen_dung?.dia_diem_lam_viec),
         exp: found.kinh_nghiem_lam_viec || 'Không yêu cầu',
         type: found.hinh_thuc_lam_viec || 'Toàn thời gian',
         level: found.cap_bac || 'Nhân viên',
+        category: found.nganh_nghe || '',
         desc: found.thong_tin_tuyen_dung?.mo_ta_cong_viec || 'Không có thông tin mô tả chi tiết.',
         req: found.thong_tin_tuyen_dung?.yeu_cau_cong_viec || 'Không có thông tin yêu cầu.',
         expire: found.thong_tin_tuyen_dung?.het_han_nop || 'Đang cập nhật...',
@@ -43,22 +114,23 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
         benefits: found.thong_tin_tuyen_dung?.quyen_loi || 'Thỏa thuận theo năng lực và quy định của công ty.'
       };
     }
-    
+
     return {
-       title: "Không tìm thấy thông tin việc làm",
-       company: "N/A",
-       salary: "N/A",
-       location: "N/A",
-       exp: "N/A",
-       type: "N/A",
-       level: "N/A",
-       desc: "Công việc này có thể đã bị xóa hoặc URL không hợp lệ.",
-       req: "N/A",
-       expire: "N/A",
-       logo: null,
-       benefits: "N/A"
+      title: "Không tìm thấy thông tin việc làm",
+      company: "N/A",
+      salary: "N/A",
+      location: "N/A",
+      exp: "N/A",
+      type: "N/A",
+      level: "N/A",
+      category: "",
+      desc: "Công việc này có thể đã bị xóa hoặc URL không hợp lệ.",
+      req: "N/A",
+      expire: "N/A",
+      logo: null,
+      benefits: "N/A"
     };
-  }, [currentId]);
+  }, [initialJob]);
 
   return (
     <div className="min-h-screen bg-[#F3F5F7] font-sans flex flex-col text-slate-800">
@@ -112,38 +184,62 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
         </div>
       </nav>
 
-      {/* --- SUB NAVBAR TÌM KIẾM --- */}
-      <div className="bg-white py-3 px-4 md:px-12 w-full border-b border-gray-200">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-3">
-          <div className="flex-1 border border-gray-300 p-2 rounded flex items-center w-full">
-            <Search className="text-gray-400 mr-2" size={18} />
-            <input
-              type="text"
-                placeholder={job.title}
-              className="w-full outline-none text-slate-800 placeholder-gray-400 text-sm"
-                defaultValue={job.title}
-            />
-          </div>
+      {/* ── FILTER PANEL ── */}
+      <div className="bg-[#1a4b6b] py-6 px-4 md:px-12 w-full shadow-inner">
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="bg-white p-1.5 rounded-lg flex flex-col md:flex-row items-center gap-2 shadow-md">
+            <div className="flex-1 flex items-center px-3 py-2 w-full">
+              <Search className="text-gray-400 mr-2" size={20} />
+              <input
+                type="text"
+                placeholder="Từ khóa, chức danh hoặc công ty"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-full outline-none text-slate-800 placeholder-gray-400 bg-transparent"
+              />
+            </div>
 
-          <div className="w-full md:w-48 border border-gray-300 p-2 rounded flex items-center">
-            <MapPin className="text-gray-400 mr-2" size={18} />
-            <select className="w-full outline-none text-slate-800 bg-transparent text-sm appearance-none cursor-pointer">
-              <option value="">Hà Nội</option>
-              <option value="hcm">Hồ Chí Minh</option>
-            </select>
-          </div>
+            <div className="hidden md:block w-px h-8 bg-gray-200" />
 
-          <div className="w-full md:w-48 border border-gray-300 p-2 rounded flex items-center">
-            <Briefcase className="text-gray-400 mr-2" size={18} />
-            <select className="w-full outline-none text-slate-800 bg-transparent text-sm appearance-none cursor-pointer">
-              <option value="">Ngành nghề</option>
-              <option value="it">IT - Phần mềm</option>
-            </select>
-          </div>
+            <div className="w-full md:w-56 flex items-center px-3 py-2">
+              <MapPin className="text-gray-400 mr-2" size={20} />
+              <select
+                value={searchLocation}
+                onChange={(e) => setSearchLocation(e.target.value)}
+                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
+              >
+                <option value="">Tất cả địa điểm</option>
+                {locationOptions.map((city) => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+              <ChevronDown className="text-gray-400" size={16} />
+            </div>
 
-          <button className="w-full md:w-32 bg-[#2463eb] hover:bg-[#1d4ed8] text-white px-4 py-2.5 rounded font-bold transition text-sm">
-            TÌM VIỆC
-          </button>
+            <div className="hidden md:block w-px h-8 bg-gray-200" />
+
+            <div className="w-full md:w-56 flex items-center px-3 py-2">
+              <Briefcase className="text-gray-400 mr-2" size={20} />
+              <select
+                value={searchCategory}
+                onChange={(e) => setSearchCategory(e.target.value)}
+                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
+              >
+                <option value="">Ngành nghề</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <ChevronDown className="text-gray-400" size={16} />
+            </div>
+
+            <button
+              onClick={handleSearch}
+              className="w-full md:w-auto bg-[#2463eb] hover:bg-blue-700 text-white px-8 py-3 rounded-md font-bold transition"
+            >
+              TÌM VIỆC
+            </button>
+          </div>
         </div>
       </div>
 
@@ -254,24 +350,35 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
 
               {/* TAGS */}
               <div className="flex flex-wrap gap-2 mb-8">
-                <span className="bg-gray-100 text-gray-600 px-3 py-1 text-xs rounded border border-gray-200">Tiếng Hàn</span>
-                <span className="bg-gray-100 text-gray-600 px-3 py-1 text-xs rounded border border-gray-200">Giáo dục đào tạo</span>
-                <span className="bg-gray-100 text-gray-600 px-3 py-1 text-xs rounded border border-gray-200">Quản lý giáo dục</span>
+                {(() => {
+                  const rawCategory = job.category || '';
+                  let tags = [job.title.split('-')[0].trim()];
+
+                  if (rawCategory && rawCategory.toLowerCase() !== 'n/a' && rawCategory !== 'Chưa cập nhật') {
+                    tags = rawCategory.split(/[,;\/]/).map((t: string) => t.trim()).filter(Boolean);
+                  }
+
+                  return tags.map((tag, idx) => (
+                    <Link key={idx} href={`/search?category=${encodeURIComponent(tag)}`} className="bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 px-3 py-1 text-xs rounded border border-gray-200 transition text-decoration-none">
+                      {tag}
+                    </Link>
+                  ));
+                })()}
               </div>
 
               {/* LONG FORMAT DETAILS */}
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-bold text-slate-800 mb-3 border-l-4 border-[#2463eb] pl-3">Mô tả công việc</h3>
-              <div className="text-sm text-gray-700 leading-relaxed">
-                <pre className="whitespace-pre-wrap font-sans text-sm">{job.desc}</pre>
+                  <div className="text-sm text-gray-700 leading-relaxed">
+                    <pre className="whitespace-pre-wrap font-sans text-sm">{job.desc}</pre>
                   </div>
                 </div>
 
                 <div>
                   <h3 className="text-lg font-bold text-slate-800 mb-3 border-l-4 border-[#2463eb] pl-3">Yêu cầu</h3>
-              <div className="text-sm text-gray-700 leading-relaxed">
-                <pre className="whitespace-pre-wrap font-sans text-sm">{job.req}</pre>
+                  <div className="text-sm text-gray-700 leading-relaxed">
+                    <pre className="whitespace-pre-wrap font-sans text-sm">{job.req}</pre>
                   </div>
                 </div>
 
@@ -286,8 +393,8 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
                   <h3 className="text-lg font-bold text-slate-800 mb-3 border-l-4 border-[#2463eb] pl-3">Thông tin chung</h3>
                   <div className="text-sm text-gray-700 leading-relaxed">
                     <ul className="list-disc pl-5 space-y-1">
-                  <li>Mức lương: {job.salary}</li>
-                  <li>Cấp bậc: {job.level}</li>
+                      <li>Mức lương: {job.salary}</li>
+                      <li>Cấp bậc: {job.level}</li>
                     </ul>
                   </div>
                 </div>
@@ -296,7 +403,7 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
                   <h3 className="text-lg font-bold text-slate-800 mb-3 border-l-4 border-[#2463eb] pl-3">Nơi làm việc</h3>
                   <div className="text-sm text-gray-700 leading-relaxed">
                     <ul className="list-disc pl-5 space-y-1">
-                  <li>{job.location}</li>
+                      <li>{job.location}</li>
                     </ul>
                   </div>
                 </div>
@@ -305,7 +412,7 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
                 <div className="mt-8 bg-gray-50 border border-gray-200 p-6 rounded-lg text-center">
                   <h4 className="font-bold text-slate-800 mb-2">Cách thức ứng tuyển</h4>
                   <p className="text-sm text-gray-500 mb-4">Ứng viên nộp hồ sơ trực tuyến bằng cách bấm nút <strong>Ứng tuyển</strong> bên dưới.</p>
-                <p className="text-sm font-semibold text-slate-700 mb-4">Hạn nộp: {job.expire}</p>
+                  <p className="text-sm font-semibold text-slate-700 mb-4">Hạn nộp: {job.expire}</p>
 
                   <div className="flex justify-center gap-3">
                     <button className="bg-[#2463eb] hover:bg-[#1d4ed8] text-white px-8 py-2.5 rounded font-bold transition shadow">
@@ -335,7 +442,7 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
                 <Link href="#" className="text-[#2463eb] text-sm hover:underline font-medium">Xem trang công ty {'»'}</Link>
               </div>
               <p className="text-sm leading-relaxed text-gray-700 bg-gray-50 p-4 rounded-md border border-gray-100">
-              <strong>{job.company}</strong> là một trong những công ty hàng đầu trong lĩnh vực hiện tại. Chúng tôi mang đến môi trường làm việc chuyên nghiệp và cơ hội thăng tiến cho các ứng viên.
+                <strong>{job.company}</strong> là một trong những công ty hàng đầu trong lĩnh vực hiện tại. Chúng tôi mang đến môi trường làm việc chuyên nghiệp và cơ hội thăng tiến cho các ứng viên.
               </p>
             </div>
           </div>
@@ -346,13 +453,13 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
             {/* COMPANY WIDGET */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5 border-t-4 border-t-[#2463eb]">
               <h3 className="font-bold text-base text-slate-800 mb-4 line-clamp-2 leading-tight">
-              {job.company} <span className="text-yellow-500">🏆</span>
+                {job.company} <span className="text-yellow-500">🏆</span>
               </h3>
 
               <div className="text-sm text-gray-600 space-y-3 mb-6">
                 <p className="flex items-start gap-2">
                   <MapPin size={16} className="mt-0.5 text-gray-400 flex-shrink-0" />
-                <span>Địa chỉ công ty: {job.location}</span>
+                  <span>Địa chỉ công ty: {job.location}</span>
                 </p>
                 <p className="flex items-center gap-2">
                   <Building2 size={16} className="text-gray-400 flex-shrink-0" />
@@ -374,7 +481,7 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
               </div>
 
               <div className="p-4 space-y-4">
-                {scrapedData.slice(0, 4).map((job, idx) => (
+                {relatedJobs.map((job, idx) => (
                   <Link key={idx} href={`/job/${encodeURIComponent(encodeURIComponent(job.url))}`} className="block group border-b border-gray-100 pb-4 last:border-0 last:pb-0 cursor-pointer">
                     <h4 className="text-sm font-bold text-slate-800 group-hover:text-[#2463eb] transition line-clamp-2 mb-1">
                       {job.tieu_de || 'Chưa cập nhật'}
@@ -382,7 +489,7 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
                     <p className="text-xs text-gray-500 mb-2 truncate uppercase">{job.cong_ty}</p>
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-slate-800 bg-gray-100 px-2 py-1 rounded truncate max-w-[50%]">{job.muc_luong}</span>
-                      <span className="text-gray-500 truncate max-w-[45%]">{job.dia_diem}</span>
+                      <span className="text-gray-500 truncate max-w-[45%]">{cleanLocation(job.dia_diem)}</span>
                     </div>
                   </Link>
                 ))}
@@ -407,10 +514,11 @@ function JobDetailContent({ user, jobId }: { user?: any, jobId?: string }) {
   );
 }
 
-export default function JobDetailPage({ user, jobId }: { user?: any, jobId?: string }) {
+export default function JobDetailPage({ user, jobId, initialJob, relatedJobs, allJobs }: { user?: any, jobId?: string, initialJob?: any, relatedJobs?: any[], allJobs?: any[] }) {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#F3F5F7] flex items-center justify-center text-slate-500">Đang tải dữ liệu...</div>}>
-      <JobDetailContent user={user} jobId={jobId} />
+      <JobDetailContent user={user} jobId={jobId} initialJob={initialJob} relatedJobs={relatedJobs} allJobs={allJobs} />
     </Suspense>
   );
 }
+
