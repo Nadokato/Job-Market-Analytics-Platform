@@ -24,7 +24,7 @@ export default function MyProfile({ user }: { user?: any }) {
   return (
     <div className="bg-[#f4f2ee] min-h-screen pb-10 text-[#000000e6]">
       {/* --- HEADER / NAVBAR --- */}
-      <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
+      <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm shrink-0">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
             <BarChart2 size={24} className="text-blue-400" />
@@ -34,15 +34,15 @@ export default function MyProfile({ user }: { user?: any }) {
             <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
           </span>
         </Link>
-        
+
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="//search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
+          <Link href="/search" className="hover:text-blue-600 transition">Job Search</Link>
           <Link href="#" className="hover:text-blue-600 transition">Market Insights</Link>
-          <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
+          <Link href="/ai" className="text-blue-600 border-b-2 border-blue-600 pb-1">AI Assistant</Link>
           <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
         </div>
-        
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
+
+        <div className="hidden lg:flex items-center gap-4 font-semibold text-sm text-slate-800">
           {user ? (
             <>
               <div className="flex items-center gap-2">
@@ -51,21 +51,17 @@ export default function MyProfile({ user }: { user?: any }) {
                 </div>
                 <span>Hi, {user.user_metadata?.full_name || 'User'}</span>
               </div>
-              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block cursor-pointer">
+              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm cursor-pointer">
                 Log Out
               </button>
             </>
           ) : (
             <>
               <Link href="/signup">
-                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
-                  Sign Up
-                </button>
+                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md">Sign Up</button>
               </Link>
               <Link href="/login">
-                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
-                  Log In
-                </button>
+                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm">Log In</button>
               </Link>
             </>
           )}
