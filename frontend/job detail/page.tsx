@@ -149,7 +149,7 @@ function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs =
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           <Link href="/search" className="text-slate-600 hover:text-[#2463eb] transition">Job Search</Link>
-          <Link href="#" className="text-slate-600 hover:text-[#2463eb] transition">Market Insights</Link>
+          <Link href="/insights" className="text-slate-600 hover:text-[#2463eb] transition">Market Insights</Link>
           <Link href="/ai" className="text-slate-600 hover:text-[#2463eb] transition">AI Assistant</Link>
           <Link href="/profile" className="text-slate-600 hover:text-[#2463eb] transition">My Profile</Link>
         </div>

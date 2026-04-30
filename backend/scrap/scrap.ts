@@ -133,7 +133,7 @@ async function scrapeJoboko() {
   };
 
   try {
-    const startUrl = 'https://vn.joboko.com/viec-lam-moi?p=12'; // THAY ĐỔI LINK Ở ĐÂY NẾU MUỐN
+    const startUrl = 'https://vn.joboko.com/viec-lam-moi?p=48'; // THAY ĐỔI LINK Ở ĐÂY NẾU MUỐN
     console.log(`Truy cập trang chủ tuyển dụng: ${startUrl}`);
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);

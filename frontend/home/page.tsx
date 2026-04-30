@@ -24,7 +24,7 @@ export default function HomePage({ user }: { user?: any }) {
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           <a href="/search" className="hover:text-blue-600 transition">Job Search</a>
-          <a href="#" className="hover:text-blue-600 transition">Market Insights</a>
+          <a href="/insights" className="hover:text-blue-600 transition">Market Insights</a>
           <a href="/ai" className="hover:text-blue-600 transition">AI Assistant</a>
           <a href="/profile" className="hover:text-blue-600 transition">My Profile</a>
         </div>

@@ -147,7 +147,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           <Link href="/search" className="hover:text-blue-600 transition">Job Search</Link>
-          <Link href="#" className="hover:text-blue-600 transition">Market Insights</Link>
+          <Link href="/insights" className="hover:text-blue-600 transition">Market Insights</Link>
           <Link href="/ai" className="text-blue-600 border-b-2 border-blue-600 pb-1">AI Assistant</Link>
           <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
         </div>
