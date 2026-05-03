@@ -108,7 +108,7 @@ const pickCleanValue = (values: Array<string | undefined>, validator?: (v?: stri
   return 'N/A';
 };
 
-async function scrapeJoboko() {
+export async function scrapeJoboko() {
   console.log('Khởi chạy trình duyệt (Headless mode: false)...');
   const browser: Browser = await chromium.launch({ headless: false });
   const page: Page = await browser.newPage();
@@ -133,13 +133,13 @@ async function scrapeJoboko() {
   };
 
   try {
-    const startUrl = 'https://vn.joboko.com/viec-lam-moi?p=48'; // THAY ĐỔI LINK Ở ĐÂY NẾU MUỐN
+    const startUrl = 'https://vn.joboko.com/viec-lam-moi?p=1'; // QUÉT TỪ TRANG 1 ĐỂ LẤY TIN MỚI NHẤT
     console.log(`Truy cập trang chủ tuyển dụng: ${startUrl}`);
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
 
     let allListJobs: any[] = [];
-    const maxPages = 3; // SỐ TRANG TỐI ĐA MUỐN CÀO (BẠN CÓ THỂ TĂNG LƯỢNG NÀY LÊN 5-10)
+    const maxPages = 5; // QUÉT 5 TRANG ĐẦU TIÊN MỖI LẦN CHẠY (KHOẢNG 100-150 TIN)
 
     for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
       console.log(`Đang quét danh sách việc làm tại Trang ${currentPage}...`);
@@ -480,16 +480,52 @@ async function scrapeJoboko() {
       }
     }
 
-    // Ghi kết quả ra file JSON local ở thư mục root để theo dõi (Front-end step)
-    fs.writeFileSync('scraped_data.json', JSON.stringify(results, null, 2), 'utf8');
     console.log('\n--- HOÀN THÀNH ---');
-    console.log(`Đã lưu ${results.length} record(s) vào file scraped_data.json`);
+    console.log(`Đã thu thập ${results.length} record(s)`);
+    return results;
 
   } catch (error) {
     console.error('Lỗi tiến trình:', error);
+    return [];
   } finally {
     await browser.close();
   }
 }
 
-scrapeJoboko();
+export async function checkJobExists(url: string): Promise<boolean> {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  // Ngăn JS chặn bot
+  await page.addInitScript(`window.__name = (func, name) => func;`);
+  
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Nếu trả về mã lỗi 4xx, 5xx (như 404)
+    if (!response || !response.ok()) return false;
+    
+    // Kiểm tra thông điệp trên trang xem tin có bị gỡ/hết hạn không
+    const isExpired = await page.evaluate(() => {
+      const text = document.body.innerText.toLowerCase();
+      return text.includes('không tìm thấy việc làm') || 
+             text.includes('tin tuyển dụng đã hết hạn') ||
+             text.includes('tin tuyển dụng này đã đóng') ||
+             text.includes('việc làm này không còn tồn tại');
+    });
+    if (isExpired) return false;
+    
+    return true;
+  } catch (err) {
+    // Lỗi mạng hoặc bị timeout (có thể link die)
+    return false;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Giữ lại khả năng chạy trực tiếp file này (nếu gọi bằng ts-node)
+if (require.main === module) {
+  scrapeJoboko().then(results => {
+    fs.writeFileSync('scraped_data.json', JSON.stringify(results, null, 2), 'utf8');
+    console.log(`Đã lưu file scraped_data.json để test local.`);
+  });
+}
