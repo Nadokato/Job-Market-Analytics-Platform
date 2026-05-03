@@ -10,7 +10,8 @@
     "scrap:cv-templates": "ts-node --project tsconfig.scripts.json --transpile-only backend/scrap/scrap_topcv_cv_templates.ts",
     "upload:cv-templates": "ts-node --project tsconfig.scripts.json --transpile-only backend/scrap/upload_cv_templates.ts",
     "jobs:worker": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/queue.ts",
-    "jobs:cron": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/cron.ts"
+    "jobs:cron": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/cron.ts",
+    "jobs:github": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/github_action.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^9.3.4",

@@ -1,0 +1,34 @@
+name: Automated Job Scraper
+
+on:
+  # Lịch chạy tự động: 19:00 UTC = 02:00 sáng giờ VN. */3 = Chạy mỗi 3 ngày
+  schedule:
+    - cron: '0 19 */3 * *'
+  
+  # Cho phép bấm nút chạy thủ công trên giao diện GitHub
+  workflow_dispatch:
+
+jobs:
+  scrape_and_clean:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Lấy mã nguồn về
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cài đặt thư viện (npm install)
+        run: npm ci
+
+      - name: Cài đặt Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Chạy Script Cào Dữ Liệu và Làm Sạch
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run jobs:github
