@@ -109,8 +109,8 @@ const pickCleanValue = (values: Array<string | undefined>, validator?: (v?: stri
 };
 
 export async function scrapeJoboko() {
-  console.log('Khởi chạy trình duyệt (Headless mode: false)...');
-  const browser: Browser = await chromium.launch({ headless: false });
+  console.log('Khởi chạy trình duyệt (Headless mode: true)...');
+  const browser: Browser = await chromium.launch({ headless: true });
   const page: Page = await browser.newPage();
 
   // Fix ReferenceError: __name is not defined do ESBuild/TSX chèn ngầm vào code
