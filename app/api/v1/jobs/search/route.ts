@@ -152,46 +152,55 @@ const getLevels = (raw: string): string[] => {
 
 // ─── Cache all jobs for 5 minutes (server-side) ─────────────────────────────
 
-const getAllJobsCached = unstable_cache(
-  async () => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+let globalJobsCache: any[] | null = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 phút
 
-    let allJobs: any[] = [];
-    let offset = 0;
-    const limit = 1000;
+const getAllJobsCached = async () => {
+  const now = Date.now();
+  if (globalJobsCache && (now - lastCacheTime < CACHE_TTL)) {
+    return globalJobsCache;
+  }
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-      if (error || !data || data.length === 0) break;
-      allJobs = allJobs.concat(data);
-      if (data.length < limit) break;
-      offset += limit;
-    }
+  let allJobs: any[] = [];
+  let offset = 0;
+  const limit = 1000;
 
-    // Deduplication
-    const seen = new Set<string>();
-    return allJobs.filter((job, idx) => {
-      const title = (job.tieu_de || job.title || '').trim().toLowerCase();
-      const company = (job.cong_ty || job.company || '').trim().toLowerCase();
-      const url = (job.url || '').trim().toLowerCase();
-      const key = url || `${title}-${company}-${job.dia_diem || job.location || ''}-${idx}`;
-      if (!isValidInfo(key)) return true;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  },
-  ['all-jobs-cache'],
-  { revalidate: 300 } // Cache 5 phút
-);
+  while (true) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error || !data || data.length === 0) break;
+    allJobs = allJobs.concat(data);
+    if (data.length < limit) break;
+    offset += limit;
+  }
+
+  // Deduplication
+  const seen = new Set<string>();
+  const deduplicated = allJobs.filter((job, idx) => {
+    const title = (job.tieu_de || job.title || '').trim().toLowerCase();
+    const company = (job.cong_ty || job.company || '').trim().toLowerCase();
+    const url = (job.url || '').trim().toLowerCase();
+    const key = url || `${title}-${company}-${job.dia_diem || job.location || ''}-${idx}`;
+    if (!isValidInfo(key)) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  globalJobsCache = deduplicated;
+  lastCacheTime = now;
+  return deduplicated;
+};
 
 // ─── GET /api/v1/jobs/search ─────────────────────────────────────────────────
 

@@ -41,34 +41,41 @@ const splitLocations = (val?: string): string[] => {
   return cities.length > 0 ? cities : (cleaned ? [cleaned] : []);
 };
 
-// Cache all jobs for 1 hour for options (no need to refresh often)
-const getAllJobsForOptions = unstable_cache(
-  async () => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+let globalOptionsCache: any[] | null = null;
+let lastOptionsCacheTime = 0;
+const OPTIONS_CACHE_TTL = 60 * 60 * 1000; // 1 giờ
 
-    let allJobs: any[] = [];
-    let offset = 0;
-    const limit = 1000;
+const getAllJobsForOptions = async () => {
+  const now = Date.now();
+  if (globalOptionsCache && (now - lastOptionsCacheTime < OPTIONS_CACHE_TTL)) {
+    return globalOptionsCache;
+  }
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('dia_diem, nganh_nghe')
-        .range(offset, offset + limit - 1);
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-      if (error || !data || data.length === 0) break;
-      allJobs = allJobs.concat(data);
-      if (data.length < limit) break;
-      offset += limit;
-    }
-    return allJobs;
-  },
-  ['jobs-options-cache'],
-  { revalidate: 3600 } // Cache 1 giờ
-);
+  let allJobs: any[] = [];
+  let offset = 0;
+  const limit = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('dia_diem, nganh_nghe')
+      .range(offset, offset + limit - 1);
+
+    if (error || !data || data.length === 0) break;
+    allJobs = allJobs.concat(data);
+    if (data.length < limit) break;
+    offset += limit;
+  }
+
+  globalOptionsCache = allJobs;
+  lastOptionsCacheTime = now;
+  return allJobs;
+};
 
 // GET /api/v1/jobs/options
 export async function GET(_req: NextRequest) {
