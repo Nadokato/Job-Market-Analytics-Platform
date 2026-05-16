@@ -13,9 +13,9 @@ export async function GET(_req: NextRequest) {
     // Dùng Elasticsearch aggregations để lấy tất cả giá trị duy nhất của từng field
     const result = await esClient.search({
       index: INDEX,
-      size:  0, // Không cần lấy documents, chỉ cần thống kê
+      size: 0, // Không cần lấy documents, chỉ cần thống kê
       aggs: {
-        locations:  { terms: { field: 'cities',     size: 200, order: { _key: 'asc' } } },
+        locations: { terms: { field: 'cities', size: 200, order: { _key: 'asc' } } },
         categories: { terms: { field: 'categories', size: 500, order: { _key: 'asc' } } },
       },
     });
@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest) {
       ((result.aggregations?.[agg] as any)?.buckets ?? []).map((b: any) => b.key as string);
 
     return NextResponse.json({
-      locations:  buckets('locations'),
+      locations: buckets('locations'),
       categories: buckets('categories'),
     }, {
       headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },

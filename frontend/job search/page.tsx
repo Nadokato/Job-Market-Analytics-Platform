@@ -423,8 +423,8 @@ function JobSearchContent({ user }: { user?: any }) {
   const [filters, setFilters] = useState<FilterState>({
     ...EMPTY_FILTERS,
     keyword: searchParams?.get('keyword') || '',
-    locations: searchParams?.get('location') ? [searchParams.get('location')!] : [],
-    categories: searchParams?.get('category') ? [searchParams.get('category')!] : [],
+    locations: searchParams?.getAll('location')?.length ? searchParams.getAll('location') : [],
+    categories: searchParams?.getAll('category')?.length ? searchParams.getAll('category') : [],
   });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -573,39 +573,7 @@ function JobSearchContent({ user }: { user?: any }) {
               />
             </div>
 
-            <div className="hidden md:block w-px h-8 bg-gray-200" />
 
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <MapPin className="text-gray-400 mr-2" size={20} />
-              <select
-                value={filters.locations[0] || ''}
-                onChange={(e) => update('locations', e.target.value ? [e.target.value] : [])}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Tất cả địa điểm</option>
-                {locationOptions.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
-
-            <div className="hidden md:block w-px h-8 bg-gray-200" />
-
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <Briefcase className="text-gray-400 mr-2" size={20} />
-              <select
-                value={filters.categories[0] || ''}
-                onChange={(e) => update('categories', e.target.value ? [e.target.value] : [])}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Ngành nghề</option>
-                {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
 
             <button
               onClick={() => {
@@ -737,14 +705,24 @@ function JobSearchContent({ user }: { user?: any }) {
                 <Link key={jobKey} href={`/job/${encodeURIComponent(encodeURIComponent(jobKey))}`} className="block group">
                   <div className="bg-white px-4 py-3 rounded-lg border border-blue-200 group-hover:border-blue-400 group-hover:shadow-md transition duration-200 flex gap-4 items-start">
                     {/* Logo */}
-                    <div className="w-14 h-14 bg-white rounded flex items-center justify-center flex-shrink-0 mt-1 border border-gray-100">
+                    <div className="w-14 h-14 bg-white rounded flex items-center justify-center flex-shrink-0 mt-1 border border-gray-100 relative overflow-hidden">
                       {isExternalJobUrl(logo) ? (
-                        <img
-                          src={logo}
-                          alt={isValidInfo(company) ? company : 'Company logo'}
-                          className="w-full h-full object-contain rounded-lg"
-                          loading="lazy"
-                        />
+                        <>
+                          <img
+                            src={logo}
+                            alt={isValidInfo(company) ? company : 'Company logo'}
+                            className="w-full h-full object-contain rounded-lg"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback') as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                          <span className="logo-fallback font-bold text-gray-400 text-xs text-center absolute inset-0 hidden items-center justify-center bg-white">
+                            {company ? company.substring(0, 4) : 'LOGO'}
+                          </span>
+                        </>
                       ) : (
                         <span className="font-bold text-gray-400 text-xs text-center">
                           {company ? company.substring(0, 4) : 'LOGO'}

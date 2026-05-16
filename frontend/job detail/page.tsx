@@ -55,6 +55,115 @@ const splitLocations = (val?: string): string[] => {
   return cities.length > 0 ? cities : (cleaned ? [cleaned] : []);
 };
 
+const toggleItem = <T,>(arr: T[], item: T): T[] =>
+  arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
+
+interface DropdownFilterProps {
+  label: string;
+  icon?: React.ReactNode;
+  options: string[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  onClear: () => void;
+  searchable?: boolean;
+}
+
+const DropdownFilter = ({ label, icon, options, selected, onToggle, onClear, searchable }: DropdownFilterProps) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+
+  if (options.length === 0) return null;
+  const activeCount = selected.length;
+
+  const filteredOptions = searchable && query.trim()
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div ref={ref} className="relative w-full md:w-56">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center px-3 py-2 text-slate-800 bg-transparent cursor-pointer select-none outline-none justify-between h-full"
+      >
+        <div className="flex items-center gap-2 overflow-hidden">
+          {icon}
+          <span className="truncate text-[15px] text-gray-700">
+            {activeCount === 0 ? label : activeCount === 1 ? selected[0] : `${label} (${activeCount})`}
+          </span>
+        </div>
+        <ChevronDown size={16} className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ml-2 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-3 z-50 bg-white rounded-lg shadow-xl border border-gray-200 min-w-[240px] max-w-[280px] overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+            {activeCount > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onClear(); }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium transition"
+              >
+                Xóa ({activeCount})
+              </button>
+            )}
+          </div>
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="Tìm kiếm..."
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded outline-none focus:border-blue-400 placeholder-gray-400 text-slate-700"
+              />
+            </div>
+          )}
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-gray-400 text-center">Không tìm thấy lựa chọn</div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isActive = selected.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    onClick={(e) => { e.stopPropagation(); onToggle(opt); }}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isActive ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                      }`}>
+                      {isActive && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="truncate">{opt}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs = [] }: { user?: any, jobId?: string, initialJob?: any, relatedJobs?: any[], allJobs?: any[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -84,14 +193,14 @@ function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs =
   };
 
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchLocation, setSearchLocation] = useState('');
-  const [searchCategory, setSearchCategory] = useState('');
+  const [searchLocations, setSearchLocations] = useState<string[]>([]);
+  const [searchCategories, setSearchCategories] = useState<string[]>([]);
 
   const handleSearch = () => {
     const params = new URLSearchParams();
     if (searchKeyword) params.set('keyword', searchKeyword);
-    if (searchLocation) params.set('location', searchLocation);
-    if (searchCategory) params.set('category', searchCategory);
+    searchLocations.forEach(loc => params.append('location', loc));
+    searchCategories.forEach(cat => params.append('category', cat));
     router.push(`/search?${params.toString()}`);
   };
 
@@ -201,37 +310,27 @@ function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs =
 
             <div className="hidden md:block w-px h-8 bg-gray-200" />
 
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <MapPin className="text-gray-400 mr-2" size={20} />
-              <select
-                value={searchLocation}
-                onChange={(e) => setSearchLocation(e.target.value)}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Tất cả địa điểm</option>
-                {locationOptions.map((city) => (
-                  <option key={city} value={city}>{city}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
+            <DropdownFilter
+              label="Tất cả địa điểm"
+              icon={<MapPin className="text-gray-400" size={20} />}
+              options={locationOptions}
+              selected={searchLocations}
+              onToggle={(v) => setSearchLocations(toggleItem(searchLocations, v))}
+              onClear={() => setSearchLocations([])}
+              searchable
+            />
 
             <div className="hidden md:block w-px h-8 bg-gray-200" />
 
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <Briefcase className="text-gray-400 mr-2" size={20} />
-              <select
-                value={searchCategory}
-                onChange={(e) => setSearchCategory(e.target.value)}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Ngành nghề</option>
-                {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
+            <DropdownFilter
+              label="Ngành nghề"
+              icon={<Briefcase className="text-gray-400" size={20} />}
+              options={categoryOptions}
+              selected={searchCategories}
+              onToggle={(v) => setSearchCategories(toggleItem(searchCategories, v))}
+              onClear={() => setSearchCategories([])}
+              searchable
+            />
 
             <button
               onClick={handleSearch}
@@ -243,13 +342,8 @@ function JobDetailContent({ user, jobId, initialJob, relatedJobs = [], allJobs =
         </div>
       </div>
 
-      {/* --- BREADCRUMB --- */}
-      <div className="max-w-6xl mx-auto w-full px-4 py-3 text-sm text-gray-500">
-        Trang chủ {'>'} Việc làm {'>'} {job.title}
-      </div>
-
       {/* --- ROOT CONTENT WRAPPER --- */}
-      <div className="max-w-6xl mx-auto w-full px-4 pb-12">
+      <div className="max-w-6xl mx-auto w-full px-4 pt-6 pb-12">
 
         {/* TOP JOB CARD */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row items-start lg:items-center justify-between gap-6 mb-6 relative">
