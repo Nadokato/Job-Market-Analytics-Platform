@@ -8,7 +8,7 @@ to avoid blocking the FastAPI event loop.
 
 from __future__ import annotations
 
-import asyncio
+
 import io
 import json
 import logging
@@ -16,7 +16,7 @@ import os
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -41,8 +41,9 @@ DEFAULT_DB_PATH = os.path.join(_CHATBOT_ROOT, "data", "qdrant_db")
 DEFAULT_LLM_URL = "http://localhost:11434/v1"
 DEFAULT_MODEL = "qwen2.5:7b"
 
-# Thread pool for blocking pipeline work
-_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pipeline")
+# NOTE: ThreadPoolExecutor removed. All heavy work now dispatched
+# to Celery workers via worker_tasks.py. Sync runners below are
+# called directly by Celery tasks.
 
 # Force UTF-8 stdout on Windows
 if sys.platform == "win32":
@@ -125,6 +126,53 @@ def _run_phase2(file_path: str) -> dict:
     )
     result = pipeline.process(file_path, analyze_layout=True)
     return {"parsed": result["parsed"], "layout": result["layout"]}
+
+import re
+def _extract_kie(file_path: str) -> dict:
+    """Lightweight Key Information Extraction for KIE route."""
+    try:
+        p2 = _run_phase2(file_path)
+        text = p2.get("parsed", {}).get("text", "")
+        if not text:
+            # Fallback if text is in a different structure
+            text = str(p2.get("parsed", ""))
+            
+        # Clean text
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Simple extraction logic (similar to previous Next.js route)
+        email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+        email = email_match.group(0) if email_match else "Not found"
+        
+        phone_match = re.search(r'(\+?\d{1,3}[-.\s]?)?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})', text)
+        phone = phone_match.group(0) if phone_match else "Not found"
+        
+        skills_keywords = ['javascript', 'python', 'java', 'react', 'node.js', 'sql', 'html', 'css']
+        skills = [s for s in skills_keywords if s.lower() in text.lower()]
+        
+        exp_match = re.search(r'(\d+)\s+years?\s+of\s+experience', text, re.IGNORECASE)
+        experience = exp_match.group(0) if exp_match else "Not found"
+        
+        edu_keywords = ['bachelor', 'master', 'phd', 'degree']
+        education = [w for w in edu_keywords if w.lower() in text.lower()]
+        education = ", ".join(education) if education else "Not found"
+        
+        # Very naive name extraction (first 2-3 words)
+        words = text.split()
+        name = " ".join(words[:2]) if words else "Not found"
+
+        return {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "skills": skills,
+            "experience": experience,
+            "education": education
+        }
+    except Exception as e:
+        logger.exception("KIE Extraction failed")
+        return {"error": str(e)}
+
 
 
 def _run_phase3_from_pdf(parsed_doc, layout_analysis) -> dict:
@@ -278,98 +326,17 @@ def _general_chat(message: str, history: list[dict] = None) -> str:
     return response.get("raw", response.get("content", "Xin lỗi, tôi không thể trả lời lúc này."))
 
 
-# ── Async Wrappers (for FastAPI) ─────────────────────────
-
-async def process_resume(file_bytes: bytes, filename: str,
-                         db_path: str = DEFAULT_DB_PATH) -> ResumeProcessResult:
-    """Process an uploaded resume through Phase 2→4.
-
-    Saves file to a temp location, runs the pipeline in a thread pool,
-    then cleans up.
-
-    Args:
-        file_bytes: Raw file content.
-        filename: Original filename (used for format detection).
-        db_path: Qdrant database path.
-
-    Returns:
-        ResumeProcessResult with resume_id and quality metrics.
-    """
-    # Save to temp file (pipeline needs a file path)
-    suffix = os.path.splitext(filename)[1]
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="chatbot_")
-    try:
-        tmp.write(file_bytes)
-        tmp.flush()
-        tmp.close()
-
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            _executor, _run_full_pipeline, tmp.name, db_path
-        )
-        return result
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except OSError:
-            pass
-
-
-async def execute_task(
-    task_type: str,
-    resume_id: Optional[str] = None,
-    resume_dict: Optional[dict] = None,
-    db_path: str = DEFAULT_DB_PATH,
-    target_role: Optional[str] = None,
-    generate_roadmap: bool = False,
-) -> TaskResult:
-    """Execute a Phase 5 task asynchronously.
-
-    Args:
-        task_type: One of 'assess', 'match', 'interview'.
-        resume_id: Qdrant point ID.
-        resume_dict: Inline resume dict (alternative).
-        db_path: Qdrant database path.
-        target_role: Target role for interview/roadmap.
-        generate_roadmap: Whether to include study roadmap.
-
-    Returns:
-        TaskResult with formatted output.
-    """
-    loop = asyncio.get_event_loop()
-    try:
-        raw = await loop.run_in_executor(
-            _executor,
-            _run_phase5_task,
-            task_type, resume_id, resume_dict, db_path,
-            target_role, generate_roadmap,
-        )
-        return TaskResult(
-            success=raw["success"],
-            task_type=raw["task_type"],
-            result=raw["result"],
-            error=raw.get("error", ""),
-            metadata=raw.get("metadata", {}),
-        )
-    except Exception as e:
-        logger.exception("Task execution failed")
-        return TaskResult(
-            success=False,
-            task_type=task_type,
-            error=str(e),
-        )
-
-
-async def general_chat(message: str, history: list[dict] = None) -> str:
-    """Run a general LLM chat asynchronously."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_executor, _general_chat, message, history)
-
+# ── Async Wrapper (health only — lightweight, no Celery needed) ──
 
 async def check_health() -> dict:
-    """Check system health asynchronously."""
+    """Check system health asynchronously.
+
+    This is the only remaining async wrapper. All other heavy work
+    is now dispatched to Celery workers via worker_tasks.py.
+    """
+    import asyncio
     loop = asyncio.get_event_loop()
     try:
-        return await loop.run_in_executor(_executor, _check_llm_health)
+        return await loop.run_in_executor(None, _check_llm_health)
     except Exception as e:
         return {"llm_available": False, "error": str(e)}

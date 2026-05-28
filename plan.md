@@ -1,0 +1,2 @@
+Database split. Supabase = OLTP. Big data viz need OLAP (ClickHouse/BigQuery). Keep market trend queries fast.
+Component strictness. Server Components handle data fetch → fast FCP. Client Components handle glassmorphism + animations only.

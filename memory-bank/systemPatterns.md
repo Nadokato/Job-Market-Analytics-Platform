@@ -12,6 +12,7 @@
 * Client State: Local UI handling inside `@/frontend/` page files.
 * Supabase SSR: Middleware in `./backend/supabase/middleware.ts` maintains sessions via HttpOnly cookies.
 * Async Workers: Scraping offloaded from web/backend to Celery workers triggered via Celery Beat schedules.
+* ML Task Queue: PDF/OCR/RAG dispatched to prioritized Celery queues (heavy/medium/light) via Redis broker. Frontend polls job status.
 
 ## Directory Layout
 * `/app/`: Next.js page routing and server components.

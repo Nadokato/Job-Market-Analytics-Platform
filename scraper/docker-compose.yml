@@ -6,7 +6,8 @@ services:
     ports:
       - "6379:6379"
 
-  celery-worker:
+  # ── Scraper Workers ──────────────────────────────────
+  scraper-worker:
     build: .
     command: celery -A celery_app worker --loglevel=info
     volumes:
@@ -19,7 +20,7 @@ services:
     depends_on:
       - redis
 
-  celery-beat:
+  scraper-beat:
     build: .
     command: celery -A celery_app beat --loglevel=info
     volumes:
@@ -31,3 +32,47 @@ services:
       - SUPABASE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
       - redis
+
+  # ── Chatbot Workers ─────────────────────────────────
+  chatbot-heavy:
+    build:
+      context: ../backend/chatbot
+    command: celery -A celery_app worker -Q heavy --concurrency=2 --loglevel=info
+    volumes:
+      - ../backend/chatbot:/app
+      - ../chatbot:/chatbot
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  chatbot-medium:
+    build:
+      context: ../backend/chatbot
+    command: celery -A celery_app worker -Q medium --concurrency=2 --loglevel=info
+    volumes:
+      - ../backend/chatbot:/app
+      - ../chatbot:/chatbot
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  chatbot-light:
+    build:
+      context: ../backend/chatbot
+    command: celery -A celery_app worker -Q light --concurrency=4 --loglevel=info
+    volumes:
+      - ../backend/chatbot:/app
+      - ../chatbot:/chatbot
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+

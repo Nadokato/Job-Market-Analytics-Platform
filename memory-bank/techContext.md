@@ -21,7 +21,7 @@
 * Start: `npm run start`
 
 ## Code Intelligence (GitNexus)
-* **Graph Stats**: 2,503 nodes | 4,105 edges | 60 clusters | 103 flows
+* **Graph Stats**: 2,620 nodes | 4,461 edges | 64 clusters | 123 flows
 * **Core Cohesive Clusters**:
   * **Phase 4-validation and storage**: 64 symbols (cohesion: 86%)
   * **Chatbot**: 58 symbols (cohesion: 86%)
