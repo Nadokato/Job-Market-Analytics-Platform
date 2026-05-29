@@ -297,11 +297,21 @@ async def kie_endpoint(
     
     Accepts PDF files, dispatches to heavy queue, returns job_id.
     """
+    # Validate file type
+    allowed_extensions = {".pdf", ".docx", ".doc", ".png", ".jpg", ".jpeg"}
     ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Allowed: {', '.join(allowed_extensions)}"
+        )
     
     file_bytes = await file.read()
     if len(file_bytes) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
+
+    if len(file_bytes) > 20 * 1024 * 1024:  # 20MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 20MB)")
 
     sid = await sessions.create(session_id)
     
@@ -349,7 +359,7 @@ async def job_status_endpoint(job_id: str):
         from celery.result import AsyncResult
         from celery_app import app as celery_app
 
-        celery_task_id = (await jobs._redis.hget(f"job:{job_id}", "celery_task_id")) or ""
+        celery_task_id = await jobs.get_celery_task_id(job_id)
         if celery_task_id:
             async_result = AsyncResult(celery_task_id, app=celery_app)
 

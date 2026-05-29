@@ -173,3 +173,9 @@ class JobTracker:
             self._session_jobs_key(session_id), 0, limit - 1
         )
         return job_ids or []
+
+    async def get_celery_task_id(self, job_id: str) -> str:
+        """Return the Celery task ID for a given job, or an empty string if not set."""
+        await self.connect()
+        task_id = await self._redis.hget(self._job_key(job_id), "celery_task_id")
+        return task_id or ""

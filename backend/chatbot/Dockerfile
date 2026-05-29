@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/chatbot/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install pipeline dependencies
+COPY python-ml-service/requirements.txt ./pipeline_reqs.txt
+RUN pip install --no-cache-dir -r pipeline_reqs.txt
+
 COPY backend/chatbot .
 
 # Also copy chatbot pipeline phases (needed by workers)

@@ -57,6 +57,7 @@ def task_process_resume(
     self.update_state(state="PROCESSING", meta={"filename": filename, "phase": "starting"})
 
     t0 = time.time()
+    exc = None
     try:
         result = _run_full_pipeline(file_path, db)
         elapsed = round(time.time() - t0, 2)
@@ -77,17 +78,19 @@ def task_process_resume(
                 "error": result.error,
                 "processing_time_s": elapsed,
             }
-    except Exception as exc:
+    except Exception as e:
+        exc = e
         logger.exception(f"Resume processing failed: {exc}")
         # Retry once after 10 seconds
         raise self.retry(exc=exc, countdown=10)
     finally:
-        # Clean up temp file
-        try:
-            if os.path.exists(file_path):
-                os.unlink(file_path)
-        except OSError:
-            pass
+        # Clean up temp file if we are not going to retry
+        if self.request.retries >= self.max_retries or exc is None:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+            except OSError:
+                pass
 
 
 @app.task(bind=True, name="worker_tasks.task_execute_rag", max_retries=1)
@@ -178,6 +181,7 @@ def task_extract_kie(self, file_path: str, filename: str) -> dict:
     logger.info(f"[heavy] Extracting KIE from: {filename}")
     self.update_state(state="PROCESSING", meta={"filename": filename, "phase": "kie_extraction"})
     
+    exc = None
     try:
         info = _extract_kie(file_path)
         return {
@@ -185,13 +189,16 @@ def task_extract_kie(self, file_path: str, filename: str) -> dict:
             "extracted_information": info,
             "pipeline": "PDF → parsing → regex → Python backend → JSON"
         }
-    except Exception as exc:
+    except Exception as e:
+        exc = e
         logger.exception(f"KIE extraction failed: {exc}")
         raise self.retry(exc=exc, countdown=10)
     finally:
-        try:
-            if os.path.exists(file_path):
-                os.unlink(file_path)
-        except OSError:
-            pass
+        # Clean up temp file if we are not going to retry
+        if self.request.retries >= self.max_retries or exc is None:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+            except OSError:
+                pass
 

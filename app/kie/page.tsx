@@ -21,10 +21,44 @@ export default function KIEPage() {
         body: formData,
       });
       const data = await response.json();
-      setResult(data);
+      
+      if (data.job_id) {
+        // Poll for completion
+        let attempts = 0;
+        const maxAttempts = 60; // 2 mins total
+        
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          try {
+            const statusRes = await fetch(`/api/chatbot/status/${data.job_id}`);
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData.status === 'COMPLETED') {
+                clearInterval(pollInterval);
+                setResult(statusData.result);
+                setLoading(false);
+              } else if (statusData.status === 'FAILED') {
+                clearInterval(pollInterval);
+                console.error(statusData.error || 'Job failed');
+                setLoading(false);
+              }
+            }
+          } catch (err) {
+            console.error("Polling error", err);
+          }
+          
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            console.error('Timeout waiting for KIE processing');
+            setLoading(false);
+          }
+        }, 2000);
+      } else {
+        setResult(data);
+        setLoading(false);
+      }
     } catch (error) {
       console.error(error);
-    } finally {
       setLoading(false);
     }
   };

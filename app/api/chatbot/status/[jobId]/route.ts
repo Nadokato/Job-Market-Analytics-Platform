@@ -10,10 +10,10 @@ const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
+  { params }: { params: { jobId: string } }
 ) {
   try {
-    const { jobId } = await params;
+    const { jobId } = params;
 
     const response = await fetch(`${BACKEND_URL}/api/job/${jobId}`, {
       method: 'GET',
