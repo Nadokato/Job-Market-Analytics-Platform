@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { scrapeJoboko, checkJobExists } from '../scrap/scrap';
+import { scrapeTopCV } from '../scrap/scrap_topcv';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
@@ -22,7 +23,19 @@ async function runAllJobs() {
   // 1. CÀO DỮ LIỆU MỚI
   // -----------------------------------------------------
   console.log('\n[1/3] Đang cào dữ liệu mới từ JobOKO...');
-  const results = await scrapeJoboko();
+  const jobokoResults = await scrapeJoboko(3); // Cào 3 trang đầu tiên của JobOKO
+
+  console.log('\n[1.5/3] Đang cào dữ liệu mới từ TopCV...');
+  let topcvResults: any[] = [];
+  try {
+    // Cào đúng 1 trang 1 lần, không giới hạn số lượng tin chi tiết
+    topcvResults = await scrapeTopCV(1);
+  } catch (err) {
+    console.error('❌ Lỗi khi chạy scraper TopCV:', (err as Error).message);
+  }
+
+  // Gộp kết quả cào từ cả 2 nguồn
+  const results = [...jobokoResults, ...topcvResults];
   
   if (results.length > 0) {
     console.log(`Tiến hành gửi ${results.length} jobs sang Python ML Service để chuẩn hóa và lưu...`);
@@ -108,13 +121,25 @@ async function runAllJobs() {
     }
     
     if (expiredUrls.length > 0) {
-      console.log(`Phát hiện ${expiredUrls.length} tin đã quá hạn. Đang tiến hành xóa hàng loạt...`);
-      const { error: deleteErr } = await supabase.from('jobs').delete().in('url', expiredUrls);
-      if (deleteErr) {
-        console.error('Lỗi khi xóa hàng loạt tin quá hạn:', deleteErr.message);
-      } else {
-        console.log(`✅ Đã xóa thành công ${expiredUrls.length} tin tuyển dụng quá hạn.`);
+      console.log(`Phát hiện ${expiredUrls.length} tin đã quá hạn. Đang tiến hành xóa hàng loạt theo lô...`);
+      
+      const batchSize = 50;
+      let deleteSuccessCount = 0;
+      let deleteFailCount = 0;
+      
+      for (let offset = 0; offset < expiredUrls.length; offset += batchSize) {
+        const batch = expiredUrls.slice(offset, offset + batchSize);
+        const { error: deleteErr } = await supabase.from('jobs').delete().in('url', batch);
+        
+        if (deleteErr) {
+          console.error(`❌ Lỗi khi xóa lô tin quá hạn (offset: ${offset}):`, deleteErr.message);
+          deleteFailCount += batch.length;
+        } else {
+          deleteSuccessCount += batch.length;
+        }
       }
+      
+      console.log(`✅ Đã xóa thành công ${deleteSuccessCount} tin tuyển dụng quá hạn, thất bại ${deleteFailCount} tin.`);
     } else {
       console.log('Không có tin tuyển dụng nào bị quá hạn.');
     }
@@ -145,13 +170,25 @@ async function runAllJobs() {
     }
     
     if (deadUrls.length > 0) {
-      console.log(`Phát hiện ${deadUrls.length} tin N/A đã chết. Đang tiến hành xóa hàng loạt...`);
-      const { error: deleteErr } = await supabase.from('jobs').delete().in('url', deadUrls);
-      if (deleteErr) {
-        console.error('Lỗi khi xóa hàng loạt tin N/A đã chết:', deleteErr.message);
-      } else {
-        console.log(`✅ Đã xóa thành công ${deadUrls.length} tin N/A không còn khả dụng.`);
+      console.log(`Phát hiện ${deadUrls.length} tin N/A đã chết. Đang tiến hành xóa hàng loạt theo lô...`);
+      
+      const batchSize = 50;
+      let deleteSuccessCount = 0;
+      let deleteFailCount = 0;
+      
+      for (let offset = 0; offset < deadUrls.length; offset += batchSize) {
+        const batch = deadUrls.slice(offset, offset + batchSize);
+        const { error: deleteErr } = await supabase.from('jobs').delete().in('url', batch);
+        
+        if (deleteErr) {
+          console.error(`❌ Lỗi khi xóa lô tin N/A đã chết (offset: ${offset}):`, deleteErr.message);
+          deleteFailCount += batch.length;
+        } else {
+          deleteSuccessCount += batch.length;
+        }
       }
+      
+      console.log(`✅ Đã xóa thành công ${deleteSuccessCount} tin N/A không còn khả dụng, thất bại ${deleteFailCount} tin.`);
     } else {
       console.log('Không phát hiện tin N/A nào bị chết.');
     }

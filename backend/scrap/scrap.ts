@@ -108,7 +108,7 @@ const pickCleanValue = (values: Array<string | undefined>, validator?: (v?: stri
   return 'N/A';
 };
 
-export async function scrapeJoboko(maxPages = 5, limitJobs?: number) {
+export async function scrapeJoboko(maxPages = 3, limitJobs?: number) {
   console.log(`Khởi chạy trình duyệt (Headless mode: true, maxPages: ${maxPages}, limitJobs: ${limitJobs ?? 'vô hạn'})...`);
   const browser: Browser = await chromium.launch({ headless: true });
   const page: Page = await browser.newPage();
@@ -507,7 +507,10 @@ export async function checkJobExists(url: string): Promise<boolean> {
       return text.includes('không tìm thấy việc làm') || 
              text.includes('tin tuyển dụng đã hết hạn') ||
              text.includes('tin tuyển dụng này đã đóng') ||
-             text.includes('việc làm này không còn tồn tại');
+             text.includes('việc làm này không còn tồn tại') ||
+             text.includes('dừng nhận hồ sơ') ||
+             text.includes('ngừng nhận hồ sơ') ||
+             text.includes('đã đóng ứng tuyển');
     });
     if (isExpired) return false;
     

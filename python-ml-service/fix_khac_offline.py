@@ -35,6 +35,7 @@ def fetch_unprocessed_jobs():
             supabase.table('jobs')
             .select('url, tieu_de, cong_ty, dia_diem, nganh_nghe_goc, mo_ta_cong_viec, ky_nang, muc_luong, logo, hinh_thuc_lam_viec')
             .is_('nganh_nghe_chuan_hoa', 'null')
+            .order('url')
             .range(offset, offset + PAGE_SIZE - 1)
             .execute()
             .data
@@ -57,6 +58,7 @@ def fetch_unprocessed_jobs():
             supabase.table('jobs')
             .select('url, tieu_de, cong_ty, dia_diem, nganh_nghe_goc, mo_ta_cong_viec, ky_nang, muc_luong, logo, hinh_thuc_lam_viec')
             .eq('nganh_nghe_chuan_hoa', KHAC)
+            .order('url')
             .range(offset, offset + PAGE_SIZE - 1)
             .execute()
             .data
