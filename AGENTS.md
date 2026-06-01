@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (2620 symbols, 4461 relationships, 123 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (1345 symbols, 1949 relationships, 63 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -41,3 +41,12 @@ This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (2620 s
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+---
+
+# Claude Model Specific Rules
+These agents handle the **research, plan, and review** of the workflow:
+1. **Never handle the coding process.** Do not write or edit application source code files.
+2. **The goal of the model is always a `.md` file guide** for the other agents.
+3. **Never auto-approve with implementation plan.** Always stop and wait for explicit user approval before planning completion or transitions.
+
