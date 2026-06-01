@@ -41,3 +41,10 @@ Sẽ containerize thêm các service:
 - Next.js web application
 - FastAPI ML gateway
 - Playwright BullMQ Worker
+
+---
+
+# Gemini Model Specific Rules
+This model handles the **coding process**:
+1. **After working according to a plan, always output a `.md` file walkthrough** that guides the reviewer agent (gemini 3.1 pro).
+
