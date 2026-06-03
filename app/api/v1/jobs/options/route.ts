@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client } from '@elastic/elasticsearch';
-
-const esClient = new Client({
-  node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
-});
+import { elasticClient } from '@/backend/lib/elasticsearch';
 
 const INDEX = 'jobs';
 
@@ -11,7 +7,7 @@ const INDEX = 'jobs';
 export async function GET(_req: NextRequest) {
   try {
     // Dùng Elasticsearch aggregations để lấy tất cả giá trị duy nhất của từng field
-    const result = await esClient.search({
+    const result = await elasticClient.search({
       index: INDEX,
       size: 0, // Không cần lấy documents, chỉ cần thống kê
       aggs: {

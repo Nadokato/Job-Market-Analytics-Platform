@@ -1,8 +1,10 @@
 import json
 import os
 import re
+import time
 from google import genai
 from google.genai import types
+from google.api_core.exceptions import ResourceExhausted
 from typing import List
 from dotenv import load_dotenv
 
@@ -16,6 +18,40 @@ if api_key:
     gemini_client = genai.Client(api_key=api_key)
 else:
     print("WARNING: GEMINI_API_KEY not found in .env.local")
+
+MAX_RETRIES = 3
+BASE_DELAY  = 2  # giây
+
+def call_gemini_with_backoff(prompt: str, config: types.GenerateContentConfig) -> str:
+    """Gọi Gemini với exponential backoff khi bị giới hạn tốc độ hoặc quá tải."""
+    if not gemini_client:
+        raise ValueError("Gemini client not initialized")
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=config
+            )
+            # Sleep 1s sau mỗi lần gọi thành công để throttle (giữ dưới 60 req/phút)
+            time.sleep(1)
+            return response.text
+        except (ResourceExhausted, Exception) as e:
+            error_str = str(e)
+            is_rate_limit = (
+                isinstance(e, ResourceExhausted) or 
+                '429' in error_str or 
+                'RESOURCE_EXHAUSTED' in error_str or
+                '503' in error_str
+            )
+            if is_rate_limit and attempt < MAX_RETRIES - 1:
+                wait = BASE_DELAY * (2 ** attempt)   # 2s, 4s, 8s
+                print(f"[WARN] Gemini 429/503 — thử lại {attempt+1}/{MAX_RETRIES} sau {wait}s. Chi tiết: {error_str}")
+                time.sleep(wait)
+            else:
+                print(f"[ERROR] Đã vượt giới hạn Gemini hoặc lỗi không thể thử lại. Chi tiết: {error_str}")
+                raise e
+    return ""
 
 # Bo 66 Nganh nghe chuan thi truong
 CORE_DOMAINS = [
@@ -174,12 +210,10 @@ Tiêu đề: {title}
 Ngành nghề gốc: {raw_tag}
 Mô tả (tóm tắt): {description[:400] if description else ''}"""
 
-                response = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt,
+                result = call_gemini_with_backoff(
+                    prompt=prompt,
                     config=types.GenerateContentConfig(temperature=0.0)
-                )
-                result = response.text.strip()
+                ).strip()
                 for domain in CORE_DOMAINS:
                     if domain.lower() == result.lower() or domain.lower() in result.lower():
                         return domain
@@ -231,15 +265,13 @@ Example: ["Excel", "Giao tiếp", "SQL", "Quản lý dự án"]
 Job Description:
 {job_description[:1500]}"""
 
-                response = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt,
+                result = call_gemini_with_backoff(
+                    prompt=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.0,
                         response_mime_type="application/json",
                     )
-                )
-                result = response.text.strip()
+                ).strip()
                 try:
                     skills = json.loads(result)
                     if isinstance(skills, list) and len(skills) > 0:

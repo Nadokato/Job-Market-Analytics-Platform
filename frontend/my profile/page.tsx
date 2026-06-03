@@ -20,7 +20,8 @@ import {
   ShieldAlert,
   Plus
 } from 'lucide-react';
-import { logout, updateProfile, updateExperiences, updateEducations, updateSkills } from '@/backend/auth/actions';
+import { logout, updateProfile, upsertExperience, deleteExperience, upsertEducation, deleteEducation, upsertSkill, deleteSkill } from '@/backend/auth/actions';
+import type { Experience, Education, Skill, UserCV } from '@/backend/types/profile';
 
 const formatTimeRange = (startM: string, startY: string, endM: string, endY: string, isCurrent: boolean) => {
   if (!startY) return '';
@@ -36,10 +37,11 @@ export default function MyProfile({ user }: { user?: any }) {
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Profile data state (fetched from /api/v1/profile)
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
   // CV Upload state
-  const [cvFile, setCvFile] = useState<{ file_name: string; file_size: number; file_type: string; uploaded_at: string; signed_url: string } | null>(
-    user?.user_metadata?.cv ?? null
-  );
+  const [cvFile, setCvFile] = useState<(UserCV & { signed_url?: string }) | null>(null);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [isDraggingCv, setIsDraggingCv] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export default function MyProfile({ user }: { user?: any }) {
       const res = await fetch('/api/v1/cv/upload', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) { setCvError(data.error || 'Upload thất bại'); return; }
-      setCvFile({ file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, uploaded_at: new Date().toISOString(), signed_url: data.signedUrl });
+      setCvFile({ id: '', user_id: '', file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, uploaded_at: data.uploadedAt || new Date().toISOString(), signed_url: data.signedUrl });
     } catch {
       setCvError('Lỗi kết nối, vui lòng thử lại');
     } finally {
@@ -102,12 +104,34 @@ export default function MyProfile({ user }: { user?: any }) {
   
   const fullName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
   const initialFirstName = fullName.split(' ')[0] || '';
-  const initialLastName = fullName.split(' ').slice(1).join(' ') || 'undefined';
+  const initialLastName = fullName.split(' ').slice(1).join(' ') || '';
 
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
-  const [country, setCountry] = useState(user?.user_metadata?.country || 'Việt Nam');
-  const [city, setCity] = useState(user?.user_metadata?.city || 'Hà Nội');
+  const [country, setCountry] = useState('Việt Nam');
+  const [city, setCity] = useState('Hà Nội');
+
+  // Fetch profile data từ proper DB tables sau khi mount
+  useEffect(() => {
+    fetch('/api/v1/profile')
+      .then(r => r.json())
+      .then(data => {
+        if (data.profile) {
+          const fn = data.profile.full_name || '';
+          setFirstName(fn.split(' ')[0] || '');
+          setLastName(fn.split(' ').slice(1).join(' ') || '');
+          setCountry(data.profile.country || 'Việt Nam');
+          setCity(data.profile.city || 'Hà Nội');
+        }
+        if (data.experiences) setExperiences(data.experiences);
+        if (data.educations) setEducations(data.educations);
+        if (data.skills) setSkills(data.skills);
+        if (data.cv) setCvFile(data.cv);
+        setProfileLoaded(true);
+      })
+      .catch(() => setProfileLoaded(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -127,7 +151,7 @@ export default function MyProfile({ user }: { user?: any }) {
   const [expEndYear, setExpEndYear] = useState('');
   const [expLocation, setExpLocation] = useState('');
   const [expDescription, setExpDescription] = useState('');
-  const [experiences, setExperiences] = useState<any[]>(user?.user_metadata?.experiences || []);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
   const [editingExpId, setEditingExpId] = useState<string | null>(null);
 
   const openAddExperience = () => {
@@ -145,60 +169,57 @@ export default function MyProfile({ user }: { user?: any }) {
     setIsExperienceModalOpen(true);
   };
 
-  const openEditExperience = (exp: any) => {
+  const openEditExperience = (exp: Experience) => {
     setExpTitle(exp.title);
-    setExpType(exp.type);
+    setExpType(exp.type || '');
     setExpCompany(exp.company);
-    setExpLocation(exp.location);
-    setExpCurrent(exp.isCurrent);
-    setExpStartMonth(exp.startMonth);
-    setExpStartYear(exp.startYear);
-    setExpEndMonth(exp.endMonth);
-    setExpEndYear(exp.endYear);
-    setExpDescription(exp.description);
+    setExpLocation(exp.location || '');
+    setExpCurrent(exp.is_current);
+    setExpStartMonth(exp.start_month || '');
+    setExpStartYear(exp.start_year || '');
+    setExpEndMonth(exp.end_month || '');
+    setExpEndYear(exp.end_year || '');
+    setExpDescription(exp.description || '');
     setEditingExpId(exp.id);
     setIsExperienceModalOpen(true);
   };
 
   const handleDeleteExperience = async () => {
     if (editingExpId) {
-      const updatedExperiences = experiences.filter(e => e.id !== editingExpId);
-      setExperiences(updatedExperiences);
+      setExperiences(prev => prev.filter(e => e.id !== editingExpId));
       setIsExperienceModalOpen(false);
-      await updateExperiences(updatedExperiences);
+      await deleteExperience(editingExpId);
     }
   };
 
   const handleSaveExperience = async () => {
-    const newExp = {
+    const newExp: Omit<Experience, 'user_id' | 'created_at'> = {
       id: editingExpId || Date.now().toString(),
       title: expTitle,
       type: expType,
       company: expCompany,
       location: expLocation,
-      isCurrent: expCurrent,
-      startMonth: expStartMonth,
-      startYear: expStartYear,
-      endMonth: expEndMonth,
-      endYear: expEndYear,
+      is_current: expCurrent,
+      start_month: expStartMonth,
+      start_year: expStartYear,
+      end_month: expEndMonth,
+      end_year: expEndYear,
       description: expDescription
     };
-    
-    let updatedExperiences;
+
     if (editingExpId) {
-      updatedExperiences = experiences.map(e => e.id === editingExpId ? newExp : e);
+      setExperiences(prev => prev.map(e => e.id === editingExpId ? { ...e, ...newExp } : e));
     } else {
-      updatedExperiences = [newExp, ...experiences];
+      setExperiences(prev => [{ ...newExp, user_id: '' }, ...prev]);
     }
-    setExperiences(updatedExperiences);
     setIsExperienceModalOpen(false);
-    await updateExperiences(updatedExperiences);
+    await upsertExperience(newExp);
   };
 
-  const expDateError = (!expCurrent && expStartMonth && expStartYear && expEndMonth && expEndYear) 
-    ? (parseInt(expEndYear) * 12 + parseInt(expEndMonth) < parseInt(expStartYear) * 12 + parseInt(expStartMonth) 
-        ? 'Ngày kết thúc không được trước ngày bắt đầu.' 
-        : '') 
+  const expDateError = (!expCurrent && expStartMonth && expStartYear && expEndMonth && expEndYear)
+    ? (parseInt(expEndYear) * 12 + parseInt(expEndMonth) < parseInt(expStartYear) * 12 + parseInt(expStartMonth)
+        ? 'Ngày kết thúc không được trước ngày bắt đầu.'
+        : '')
     : '';
 
   // Education Form State
@@ -212,7 +233,7 @@ export default function MyProfile({ user }: { user?: any }) {
   const [eduEndYear, setEduEndYear] = useState('');
   const [eduActivities, setEduActivities] = useState('');
   const [eduDescription, setEduDescription] = useState('');
-  const [educations, setEducations] = useState<any[]>(user?.user_metadata?.educations || []);
+  const [educations, setEducations] = useState<Education[]>([]);
   const [editingEduId, setEditingEduId] = useState<string | null>(null);
 
   const openAddEducation = () => {
@@ -229,52 +250,49 @@ export default function MyProfile({ user }: { user?: any }) {
     setIsEducationModalOpen(true);
   };
 
-  const openEditEducation = (edu: any) => {
+  const openEditEducation = (edu: Education) => {
     setEduSchool(edu.school);
-    setEduDegree(edu.degree);
-    setEduFieldOfStudy(edu.fieldOfStudy);
-    setEduStartMonth(edu.startMonth);
-    setEduStartYear(edu.startYear);
-    setEduEndMonth(edu.endMonth);
-    setEduEndYear(edu.endYear);
-    setEduActivities(edu.activities);
-    setEduDescription(edu.description);
+    setEduDegree(edu.degree || '');
+    setEduFieldOfStudy(edu.field_of_study || '');
+    setEduStartMonth(edu.start_month || '');
+    setEduStartYear(edu.start_year || '');
+    setEduEndMonth(edu.end_month || '');
+    setEduEndYear(edu.end_year || '');
+    setEduActivities(edu.activities || '');
+    setEduDescription(edu.description || '');
     setEditingEduId(edu.id);
     setIsEducationModalOpen(true);
   };
 
   const handleDeleteEducation = async () => {
     if (editingEduId) {
-      const updatedEducations = educations.filter(e => e.id !== editingEduId);
-      setEducations(updatedEducations);
+      setEducations(prev => prev.filter(e => e.id !== editingEduId));
       setIsEducationModalOpen(false);
-      await updateEducations(updatedEducations);
+      await deleteEducation(editingEduId);
     }
   };
 
   const handleSaveEducation = async () => {
-    const newEdu = {
+    const newEdu: Omit<Education, 'user_id' | 'created_at'> = {
       id: editingEduId || Date.now().toString(),
       school: eduSchool,
       degree: eduDegree,
-      fieldOfStudy: eduFieldOfStudy,
-      startMonth: eduStartMonth,
-      startYear: eduStartYear,
-      endMonth: eduEndMonth,
-      endYear: eduEndYear,
+      field_of_study: eduFieldOfStudy,
+      start_month: eduStartMonth,
+      start_year: eduStartYear,
+      end_month: eduEndMonth,
+      end_year: eduEndYear,
       activities: eduActivities,
       description: eduDescription
     };
-    
-    let updatedEducations;
+
     if (editingEduId) {
-      updatedEducations = educations.map(e => e.id === editingEduId ? newEdu : e);
+      setEducations(prev => prev.map(e => e.id === editingEduId ? { ...e, ...newEdu } : e));
     } else {
-      updatedEducations = [newEdu, ...educations];
+      setEducations(prev => [{ ...newEdu, user_id: '' }, ...prev]);
     }
-    setEducations(updatedEducations);
     setIsEducationModalOpen(false);
-    await updateEducations(updatedEducations);
+    await upsertEducation(newEdu);
   };
 
   const eduDateError = (eduStartMonth && eduStartYear && eduEndMonth && eduEndYear) 
@@ -287,7 +305,7 @@ export default function MyProfile({ user }: { user?: any }) {
   const [isSkillModalOpen, setIsSkillModalOpen] = useState(false);
   const [isSkillEditMode, setIsSkillEditMode] = useState(false);
   const [skillName, setSkillName] = useState('');
-  const [skills, setSkills] = useState<any[]>(user?.user_metadata?.skills || []);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
 
   const openAddSkill = () => {
@@ -296,7 +314,7 @@ export default function MyProfile({ user }: { user?: any }) {
     setIsSkillModalOpen(true);
   };
 
-  const openEditSkill = (skill: any) => {
+  const openEditSkill = (skill: Skill) => {
     setSkillName(skill.name);
     setEditingSkillId(skill.id);
     setIsSkillModalOpen(true);
@@ -304,36 +322,33 @@ export default function MyProfile({ user }: { user?: any }) {
 
   const handleDeleteSkill = async () => {
     if (editingSkillId) {
-      const updatedSkills = skills.filter(s => s.id !== editingSkillId);
-      setSkills(updatedSkills);
+      setSkills(prev => prev.filter(s => s.id !== editingSkillId));
       setIsSkillModalOpen(false);
-      await updateSkills(updatedSkills);
+      await deleteSkill(editingSkillId);
     }
   };
 
   const handleDeleteSkillDirect = async (id: string) => {
-    const updatedSkills = skills.filter(s => s.id !== id);
-    setSkills(updatedSkills);
-    await updateSkills(updatedSkills);
+    setSkills(prev => prev.filter(s => s.id !== id));
+    await deleteSkill(id);
   };
 
   const handleSaveSkill = async () => {
     if (!skillName.trim()) return;
-    
-    const newSkill = {
+
+    const newSkill: Omit<Skill, 'user_id' | 'created_at'> = {
       id: editingSkillId || Date.now().toString(),
       name: skillName,
+      level: null,
     };
-    
-    let updatedSkills;
+
     if (editingSkillId) {
-      updatedSkills = skills.map(s => s.id === editingSkillId ? newSkill : s);
+      setSkills(prev => prev.map(s => s.id === editingSkillId ? { ...s, ...newSkill } : s));
     } else {
-      updatedSkills = [newSkill, ...skills];
+      setSkills(prev => [{ ...newSkill, user_id: '' }, ...prev]);
     }
-    setSkills(updatedSkills);
     setIsSkillModalOpen(false);
-    await updateSkills(updatedSkills);
+    await upsertSkill(newSkill);
   };
 
   if (!user) {
@@ -520,8 +535,8 @@ export default function MyProfile({ user }: { user?: any }) {
               
               {experiences.length > 0 ? (
                 <div className="flex flex-col gap-6">
-                  {experiences.map((exp: any) => {
-                    const timeRange = formatTimeRange(exp.startMonth, exp.startYear, exp.endMonth, exp.endYear, exp.isCurrent);
+                  {experiences.map((exp) => {
+                    const timeRange = formatTimeRange(exp.start_month || '', exp.start_year || '', exp.end_month || '', exp.end_year || '', exp.is_current);
                     
                     return (
                       <div key={exp.id} className="flex items-start justify-between text-slate-800">
@@ -576,8 +591,8 @@ export default function MyProfile({ user }: { user?: any }) {
               
               {educations.length > 0 ? (
                 <div className="flex flex-col gap-6 mt-2">
-                  {educations.map((edu: any) => {
-                    const timeRange = formatTimeRange(edu.startMonth, edu.startYear, edu.endMonth, edu.endYear, false);
+                  {educations.map((edu) => {
+                    const timeRange = formatTimeRange(edu.start_month || '', edu.start_year || '', edu.end_month || '', edu.end_year || '', false);
                     
                     return (
                       <div key={edu.id} className="flex items-start justify-between text-slate-800">
@@ -588,7 +603,7 @@ export default function MyProfile({ user }: { user?: any }) {
                           <div>
                             <h3 className="font-semibold text-[16px]">{edu.school}</h3>
                             <p className="text-[14px] mt-0.5">
-                              {edu.degree}{edu.fieldOfStudy ? `, ${edu.fieldOfStudy}` : ''}
+                              {edu.degree}{edu.field_of_study ? `, ${edu.field_of_study}` : ''}
                             </p>
                             <p className="text-[14px] text-gray-500 mt-0.5">
                               {timeRange}

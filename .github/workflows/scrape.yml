@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 120  # Tối đa 2 tiếng
 
     steps:
+      # ── PIPELINE FLOW ──────────────────────────────────────────────
+      # Step 5: Scrape → raw upsert to Supabase (no FastAPI, direct upsert)
+      # Step 6: Offline normalization via fix_khac_offline.py (calls Gemini API)
+      # NOTE: ES sync is handled separately in the cloud deployment environment
+      # ──────────────────────────────────────────────────────────────────
+
       # ── BƯỚC 1: LẤY CODE ──────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4

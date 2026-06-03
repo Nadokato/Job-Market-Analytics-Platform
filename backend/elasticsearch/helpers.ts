@@ -23,6 +23,22 @@ export const CITY_PATTERNS = [
   'Kon Tum', 'Đắk Nông', 'Toàn quốc', 'Nước ngoài',
 ];
 
+/**
+ * Chuẩn hoá chuỗi địa điểm thô thành tên thành phố chuẩn từ danh sách CITY_PATTERNS.
+ * Đây là hàm dùng chung (source of truth) cho cả scraper và ES sync.
+ * @param rawText - Chuỗi địa điểm thô từ trang web
+ * @returns Tên thành phố chuẩn hoặc null nếu không khớp
+ */
+export function normalizeLocation(rawText?: string): string | null {
+  const text = (rawText || '').replace(/\s+/g, ' ').trim();
+  if (!text || text.length > 80) return null;
+  // Lọc bỏ các chuỗi trông giống chức vụ/ngành nghề thay vì địa điểm
+  if (/(chức vụ|kinh nghiệm|khách|chuyên viên|nhân viên|trưởng phòng|giám đốc|thực tập sinh|kỹ sư|quản lý|tuyển dụng|sale)/i.test(text)) return null;
+  const matched = CITY_PATTERNS.find(city => text.toLowerCase().includes(city.toLowerCase()));
+  if (matched) return matched;
+  return null;
+}
+
 export const splitLocations = (val?: string): string[] => {
   if (!val) return [];
   const cleaned = val.replace(/^(làm việc:\s*|nơi làm việc:\s*|khu vực:\s*|tại:\s*)/i, '').trim();

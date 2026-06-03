@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Lấy signed URL (private bucket — expires sau 1 năm)
+  // Lấy signed URL (fresh, expires sau 1 năm)
   const { data: signedData, error: signedError } = await supabase.storage
     .from('user-cvs')
     .createSignedUrl(filePath, 60 * 60 * 24 * 365);
@@ -80,23 +80,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Lưu metadata vào user_metadata (Supabase Auth)
-  const cvMeta = {
+  const uploadedAt = new Date().toISOString();
+
+  // Xóa CV cũ rồi lưu metadata vào bảng user_cvs (KHÔNG lưu vào user_metadata)
+  await supabase.from('user_cvs').delete().eq('user_id', user.id);
+  const { error: dbError } = await supabase.from('user_cvs').insert({
+    user_id: user.id,
     file_name: file.name,
     file_path: filePath,
     file_size: file.size,
     file_type: file.type,
-    uploaded_at: new Date().toISOString(),
-    signed_url: signedData.signedUrl,
-  };
-
-  const { error: updateError } = await supabase.auth.updateUser({
-    data: { cv: cvMeta },
+    uploaded_at: uploadedAt,
   });
 
-  if (updateError) {
-    console.error('[CV Upload] Metadata update error:', updateError.message);
-    // Upload vẫn thành công, chỉ metadata lưu thất bại — không block
+  if (dbError) {
+    console.error('[CV Upload] DB insert error:', dbError.message);
+    // Upload vẫn thành công, chỉ DB insert thất bại — không block
   }
 
   return NextResponse.json({
@@ -106,10 +105,11 @@ export async function POST(req: NextRequest) {
     fileType: file.type,
     signedUrl: signedData.signedUrl,
     filePath,
+    uploadedAt,
   });
 }
 
-// Lấy thông tin CV hiện tại của user
+// Lấy thông tin CV hiện tại của user (từ bảng user_cvs)
 export async function GET() {
   const supabase = await createClient();
 
@@ -118,25 +118,29 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const cvMeta = user.user_metadata?.cv ?? null;
+  const { data: cvRecord } = await supabase
+    .from('user_cvs')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
 
-  // Nếu có cv, refresh signed URL (vì URL có thể hết hạn)
-  if (cvMeta?.file_path) {
-    const { data: signedData } = await supabase.storage
-      .from('user-cvs')
-      .createSignedUrl(cvMeta.file_path, 60 * 60 * 24 * 365);
-
-    return NextResponse.json({
-      cv: signedData
-        ? { ...cvMeta, signed_url: signedData.signedUrl }
-        : cvMeta,
-    });
+  if (!cvRecord) {
+    return NextResponse.json({ cv: null });
   }
 
-  return NextResponse.json({ cv: null });
+  // Generate fresh signed URL
+  const { data: signedData } = await supabase.storage
+    .from('user-cvs')
+    .createSignedUrl(cvRecord.file_path, 60 * 60 * 24 * 365);
+
+  return NextResponse.json({
+    cv: signedData
+      ? { ...cvRecord, signed_url: signedData.signedUrl }
+      : cvRecord,
+  });
 }
 
-// Xoá CV
+// Xoá CV (Storage + DB record)
 export async function DELETE() {
   const supabase = await createClient();
 
@@ -145,21 +149,28 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const filePath = user.user_metadata?.cv?.file_path;
-  if (!filePath) {
+  // Lấy file_path từ DB
+  const { data: cvRecord } = await supabase
+    .from('user_cvs')
+    .select('file_path')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!cvRecord) {
     return NextResponse.json({ error: 'Không có CV để xoá' }, { status: 404 });
   }
 
+  // Xóa file khỏi Storage
   const { error: removeError } = await supabase.storage
     .from('user-cvs')
-    .remove([filePath]);
+    .remove([cvRecord.file_path]);
 
   if (removeError) {
     return NextResponse.json({ error: removeError.message }, { status: 500 });
   }
 
-  // Xoá metadata
-  await supabase.auth.updateUser({ data: { cv: null } });
+  // Xóa record khỏi DB
+  await supabase.from('user_cvs').delete().eq('user_id', user.id);
 
   return NextResponse.json({ success: true });
 }

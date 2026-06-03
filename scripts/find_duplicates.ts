@@ -1,6 +1,6 @@
 /**
  * Script tìm các jobs bị trùng lặp trong Supabase.
- * Chạy: npx ts-node --project tsconfig.scripts.json --transpile-only find_duplicates.ts
+ * Chạy: npx ts-node --project tsconfig.scripts.json --transpile-only scripts/find_duplicates.ts
  */
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';

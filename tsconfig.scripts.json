@@ -3,5 +3,10 @@
   "compilerOptions": {
     "moduleResolution": "node",
     "module": "commonjs"
-  }
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "backend/**/*.ts"
+  ]
 }
+

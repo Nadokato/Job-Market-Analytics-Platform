@@ -140,6 +140,15 @@ def main():
     print("=" * 55)
     sys.stdout.flush()
 
+    # Check for --limit argument
+    limit = None
+    for i, arg in enumerate(sys.argv):
+        if arg == '--limit' and i + 1 < len(sys.argv):
+            try:
+                limit = int(sys.argv[i + 1])
+            except ValueError:
+                pass
+
     # Fetch all unprocessed records
     rows = fetch_unprocessed_jobs()
     
@@ -147,6 +156,10 @@ def main():
         print("\nAll records already normalized! Nothing to do.")
         sys.stdout.flush()
         return
+
+    if limit is not None:
+        print(f"Limiting processing to first {limit} records.")
+        rows = rows[:limit]
 
     print(f"\nTotal records to process: {len(rows)}")
     sys.stdout.flush()

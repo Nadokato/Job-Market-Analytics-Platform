@@ -38,57 +38,36 @@ async function runAllJobs() {
   const results = [...jobokoResults, ...topcvResults];
   
   if (results.length > 0) {
-    console.log(`Tiến hành gửi ${results.length} jobs sang Python ML Service để chuẩn hóa và lưu...`);
+    // FastAPI is not started in CI. Normalization runs offline via fix_khac_offline.py
+    // Direct upsert raw data to Supabase — offline normalizer will process afterward.
+    console.log(`Tiến hành lưu thẳng ${results.length} jobs vào Supabase (raw data, sẽ được chuẩn hóa offline)...`);
     
-    let successCount = 0;
-    let fallbackCount = 0;
     let failCount = 0;
     
     for (const job of results) {
-      try {
-        const res = await fetch('http://127.0.0.1:8000/api/v1/jobs/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(job),
-        });
-        
-        if (res.ok) {
-          successCount++;
-        } else {
-          const errorText = await res.text();
-          console.error(`Lỗi ML API cho job ${job.url}:`, errorText);
-          throw new Error(`ML API returned status ${res.status}`);
-        }
-      } catch (err) {
-        console.warn(`[ML API Offline/Lỗi] Không thể kết nối ML API cho job ${job.url}: ${(err as Error).message}`);
-        console.log(`-> Kích hoạt chế độ dự phòng (Direct Fallback): Lưu thẳng dữ liệu thô vào Supabase...`);
-        
-        // Direct Fallback: Lưu trực tiếp dữ liệu thô vào Supabase để fix_khac_offline.py xử lý sau
-        const { error: upsertErr } = await supabase.from('jobs').upsert({
-          url: job.url,
-          tieu_de: job.tieu_de,
-          cong_ty: job.cong_ty,
-          dia_diem: job.dia_diem,
-          muc_luong: job.muc_luong,
-          logo: job.logo,
-          hinh_thuc_lam_viec: job.hinh_thuc_lam_viec,
-          nganh_nghe: job.nganh_nghe,
-          cap_bac: job.cap_bac,
-          kinh_nghiem_lam_viec: job.kinh_nghiem_lam_viec,
-          thong_tin_tuyen_dung: job.thong_tin_tuyen_dung,
-        }, { onConflict: 'url' });
+      const { error: upsertErr } = await supabase.from('jobs').upsert({
+        url: job.url,
+        tieu_de: job.tieu_de,
+        cong_ty: job.cong_ty,
+        dia_diem: job.dia_diem,
+        muc_luong: job.muc_luong,
+        logo: job.logo,
+        hinh_thuc_lam_viec: job.hinh_thuc_lam_viec,
+        nganh_nghe: job.nganh_nghe,
+        cap_bac: job.cap_bac,
+        kinh_nghiem_lam_viec: job.kinh_nghiem_lam_viec,
+        thong_tin_tuyen_dung: job.thong_tin_tuyen_dung,
+      }, { onConflict: 'url' });
 
-        if (upsertErr) {
-          console.error(`❌ Không thể lưu tin tuyển dụng thô vào Supabase:`, upsertErr.message);
-          failCount++;
-        } else {
-          console.log(`✅ Lưu dữ liệu thô thành công cho: ${job.tieu_de}`);
-          fallbackCount++;
-        }
+      if (upsertErr) {
+        console.error(`❌ Không thể lưu tin tuyển dụng vào Supabase:`, upsertErr.message);
+        failCount++;
+      } else {
+        console.log(`✅ Đã lưu: ${job.tieu_de}`);
       }
     }
     
-    console.log(`Hoàn tất xử lý cào mới: ML Thành công ${successCount}, Dự phòng (Thô) ${fallbackCount}, Thất bại ${failCount}`);
+    console.log(`Hoàn tất: ${results.length - failCount} thành công, ${failCount} thất bại.`);
   } else {
     console.log('Không tìm thấy dữ liệu mới nào.');
   }

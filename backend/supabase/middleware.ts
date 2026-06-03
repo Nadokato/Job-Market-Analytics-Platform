@@ -35,12 +35,22 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Mẫu: Bảo vệ route (nếu người dùng chưa đăng nhập mà vào route bảo vệ thì chuyển hướng)
-  // if (!user && request.nextUrl.pathname.startsWith('/protected-route')) {
-  //   const url = request.nextUrl.clone()
-  //   url.pathname = '/login'
-  //   return NextResponse.redirect(url)
-  // }
+  const protectedRoutes = ['/profile', '/ai', '/search', '/insights', '/job']
+  const isProtectedRoute = protectedRoutes.some(route =>
+    request.nextUrl.pathname.startsWith(route)
+  )
+
+  const isApiProtected = request.nextUrl.pathname.startsWith('/api/')
+
+  if (!user && (isProtectedRoute || isApiProtected)) {
+    if (isApiProtected) {
+      // API routes return 401 JSON instead of redirect
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }

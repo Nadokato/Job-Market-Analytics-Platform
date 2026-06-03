@@ -61,8 +61,13 @@ export async function checkRateLimit(
 
     return { success: true, count };
   } catch (err) {
-    console.error('[RedisSecurity] Lỗi thực thi Rate Limiting:', err);
-    // Fallback: nếu lỗi Redis, cho phép request đi qua để tránh làm sập ứng dụng (Fail-open)
+    console.warn(
+      '[RedisSecurity] ⚠️  WARN: Redis unreachable — Rate limiting is DISABLED. ' +
+      'All requests are being allowed through. Investigate immediately.',
+      err
+    );
+    // Fail-open intentional: availability > security for search endpoints.
+    // Ops team must be alerted via monitoring on this WARN log.
     return { success: true, count: 0 };
   }
 }
@@ -107,8 +112,14 @@ export async function isTokenBlacklisted(token: string): Promise<boolean> {
     const exists = await redis.exists(key);
     return exists === 1;
   } catch (err) {
-    console.error('[RedisSecurity] Lỗi kiểm tra Blacklist token:', err);
-    // Fallback: nếu lỗi Redis, coi như không nằm trong blacklist (Fail-open)
-    return false;
+    console.error(
+      '[RedisSecurity] 🔴 CRITICAL: Redis unreachable — Token blacklist check FAILED. ' +
+      'Failing CLOSED: treating token as blacklisted to protect security. ' +
+      'This may cause authenticated users to be logged out temporarily. Investigate immediately.',
+      err
+    );
+    // Fail-closed: khi không thể xác minh trạng thái blacklist, từ chối token để đảm bảo bảo mật.
+    // Người dùng bị ảnh hưởng tạm thời khi Redis xuống — đây là đánh đổi có chủ đích: security > availability.
+    return true;
   }
 }

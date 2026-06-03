@@ -16,7 +16,7 @@ export async function scrapeTopCV(maxPages = 1, limitJobs?: number): Promise<any
   console.log(`=== BẮT ĐẦU CÀO DỮ LIỆU TỪ TOPCV (Số trang tối đa: ${maxPages}, Giới hạn tin: ${limitJobs ?? 'Vô hạn'}) ===`);
   
   // Chạy headless: true để phù hợp với môi trường CI/CD GitHub Actions
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
 
   // Set User-Agent giả lập trình duyệt người dùng thật
@@ -38,7 +38,8 @@ export async function scrapeTopCV(maxPages = 1, limitJobs?: number): Promise<any
       
       try {
         await page.goto(urlList, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await delay(3000); // Chờ render các tin tuyển dụng động
+        await delay(8000); // Chờ render các tin tuyển dụng động
+
 
         const pageJobs = await page.evaluate(() => {
           const items = Array.from(document.querySelectorAll('.job-item-search-result, .job-item-default, .job-list-default, [class*="job-item"]'));
@@ -293,10 +294,10 @@ export async function scrapeTopCV(maxPages = 1, limitJobs?: number): Promise<any
         await detailPage.close();
       }
 
-      // Theo yêu cầu của USER: delay 7 giây giống hệt JobOKO để an toàn tối đa cho IP
+      //delay 10 giây 
       if (i < jobsToScrape.length - 1) {
-        console.log('   Chờ 7 giây trước khi cào job tiếp theo...');
-        await delay(7000);
+        console.log('   Chờ 10 giây trước khi cào job tiếp theo...');
+        await delay(10000);
       }
     }
 
@@ -309,3 +310,13 @@ export async function scrapeTopCV(maxPages = 1, limitJobs?: number): Promise<any
   console.log(`=== HOÀN THÀNH CÀO TOPCV: Thu thập được ${scrapedJobs.length} records ===\n`);
   return scrapedJobs;
 }
+
+// Giữ lại khả năng chạy trực tiếp file này (nếu gọi bằng ts-node)
+if (require.main === module) {
+  const fs = require('fs');
+  scrapeTopCV(2).then(results => {
+    fs.writeFileSync('scraped_data.json', JSON.stringify(results, null, 2), 'utf8');
+    console.log(`Đã lưu file scraped_data.json từ nguồn TopCV để test local.`);
+  });
+}
+

@@ -1,10 +1,11 @@
 import MarketInsightsPage from '@/frontend/market insights/page';
 import { createClient } from '@/backend/supabase/server';
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'Market Insights — CareerIntel',
-  description: 'Phân tích xu hướng thị trường việc làm, mức lương và cơ hội nghề nghiệp tại Việt Nam.',
-};
+export const metadata: Metadata = {
+  title: 'Market Insights',
+  description: 'Phân tích xu hướng thị trường lao động, kỹ năng nổi bật và phân phối mức lương theo ngành nghề.',
+}
 
 export default async function InsightsRoute() {
   const supabase = await createClient();

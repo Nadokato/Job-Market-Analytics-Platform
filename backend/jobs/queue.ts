@@ -1,13 +1,27 @@
 import { Queue, Worker } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
 import { scrapeJoboko, checkJobExists } from '../scrap/scrap';
+import { closeSharedBrowser } from '../scrap/scrapers/joboko';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-const connection = {
+let connection: any = {
   host: 'localhost',
   port: 6379,
 };
+
+if (process.env.REDIS_URL) {
+  try {
+    const parsed = new URL(process.env.REDIS_URL);
+    connection = {
+      host: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port, 10) : 6379,
+      password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+    };
+  } catch (err) {
+    console.error('[BullMQ] Lỗi parse REDIS_URL:', err);
+  }
+}
 
 export const jobQueue = new Queue('job-queue', { connection });
 
@@ -88,6 +102,8 @@ const worker = new Worker('job-queue', async job => {
       }
     }
     console.log(`Đã xóa ${deletedCount} tin N/A không còn khả dụng.`);
+    // Giải phóng shared browser sau khi kết thúc toàn bộ batch kiểm tra
+    await closeSharedBrowser();
   }
 }, { connection });
 

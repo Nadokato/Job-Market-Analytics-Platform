@@ -3,16 +3,26 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/backend/supabase/server'
+import type { Experience, Education, Skill } from '@/backend/types/profile'
+import { LoginSchema, SignupSchema } from './schemas'
+
+// ============================================================
+// AUTH ACTIONS
+// ============================================================
 
 export async function login(prevState: any, formData: FormData) {
   const supabase = await createClient()
 
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
+  const parsed = LoginSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+  })
 
-  if (!email || !password) {
-    return { error: 'Please enter both email and password.' }
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0].message }
   }
+
+  const { email, password } = parsed.data
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -30,15 +40,19 @@ export async function login(prevState: any, formData: FormData) {
 export async function signup(prevState: any, formData: FormData) {
   const supabase = await createClient()
 
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
-  const name = formData.get('name') as string
+  const parsed = SignupSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+    name: formData.get('name'),
+  })
 
-  if (!email || !password || !name) {
-    return { error: 'Please fill in all fields.', success: null }
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0].message, success: null }
   }
 
-  // Pass name to user metadata
+  const { email, password, name } = parsed.data
+
+  // Giữ full_name trong user_metadata để Navbar hiển thị tên user
   const { error } = await supabase.auth.signUp({
     email,
     password,
@@ -53,20 +67,17 @@ export async function signup(prevState: any, formData: FormData) {
     return { error: error.message, success: null }
   }
 
-  // Trở về một chuỗi thành công để giao diện hiển thị thông báo check email
   return { success: 'Đăng ký thành công! Vui lòng kiểm tra email của bạn để xác nhận tài khoản.', error: null }
 }
 
 export async function logout() {
   const supabase = await createClient()
-  
+
   try {
-    // Lấy session hiện tại để lấy access_token
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
-    
+
     if (token) {
-      // Import động để tránh các vấn đề import vòng lặp hoặc import lỗi môi trường edge
       const { blacklistToken } = await import('@/backend/lib/redisSecurity')
       await blacklistToken(token)
     }
@@ -79,73 +90,206 @@ export async function logout() {
   redirect('/login')
 }
 
-export async function updateProfile(firstName: string, lastName: string, country: string, city: string) {
+// ============================================================
+// PROFILE ACTIONS — Ghi vào bảng public.profiles
+// ============================================================
+
+export async function updateProfile(
+  firstName: string,
+  lastName: string,
+  country: string,
+  city: string
+) {
   const supabase = await createClient()
-  
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
   const fullName = `${firstName} ${lastName}`.trim()
 
-  const { error } = await supabase.auth.updateUser({
-    data: {
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({
+      id: user.id,
       full_name: fullName,
       country,
-      city
-    }
-  })
+      city,
+      updated_at: new Date().toISOString(),
+    })
 
-  if (error) {
-    return { error: error.message }
-  }
+  if (error) return { error: error.message }
 
-  revalidatePath('/profile')
-  return { success: true }
-}
-
-export async function updateExperiences(experiences: any[]) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase.auth.updateUser({
-    data: {
-      experiences
-    }
-  })
-
-  if (error) {
-    return { error: error.message }
-  }
+  // Cập nhật full_name trong user_metadata để Navbar vẫn hiển thị đúng
+  await supabase.auth.updateUser({ data: { full_name: fullName } })
 
   revalidatePath('/profile')
   return { success: true }
 }
 
-export async function updateEducations(educations: any[]) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase.auth.updateUser({
-    data: {
-      educations
-    }
-  })
+// ============================================================
+// EXPERIENCE ACTIONS — Ghi vào bảng public.experiences
+// ============================================================
 
-  if (error) {
-    return { error: error.message }
-  }
+export async function upsertExperience(
+  experience: Omit<Experience, 'user_id' | 'created_at'>
+) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('experiences')
+    .upsert({ ...experience, user_id: user.id })
+
+  if (error) return { error: error.message }
 
   revalidatePath('/profile')
   return { success: true }
 }
 
-export async function updateSkills(skills: any[]) {
+export async function deleteExperience(id: string) {
   const supabase = await createClient()
-  
-  const { error } = await supabase.auth.updateUser({
-    data: {
-      skills
-    }
-  })
 
-  if (error) {
-    return { error: error.message }
-  }
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('experiences')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+// ============================================================
+// EDUCATION ACTIONS — Ghi vào bảng public.educations
+// ============================================================
+
+export async function upsertEducation(
+  education: Omit<Education, 'user_id' | 'created_at'>
+) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('educations')
+    .upsert({ ...education, user_id: user.id })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function deleteEducation(id: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('educations')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+// ============================================================
+// SKILL ACTIONS — Ghi vào bảng public.skills
+// ============================================================
+
+export async function upsertSkill(
+  skill: Omit<Skill, 'user_id' | 'created_at'>
+) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('skills')
+    .upsert({ ...skill, user_id: user.id })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function deleteSkill(id: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('skills')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+// ============================================================
+// CV ACTIONS — Ghi vào bảng public.user_cvs
+// ============================================================
+
+export async function saveUserCV(cvData: {
+  file_name: string
+  file_path: string
+  file_size: number
+  file_type: string
+  uploaded_at: string
+}) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  // Xóa CV cũ của user trước (chỉ giữ 1 CV mỗi lúc)
+  await supabase.from('user_cvs').delete().eq('user_id', user.id)
+
+  const { error } = await supabase
+    .from('user_cvs')
+    .insert({
+      user_id: user.id,
+      ...cvData,
+    })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function deleteUserCV() {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('user_cvs')
+    .delete()
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
 
   revalidatePath('/profile')
   return { success: true }

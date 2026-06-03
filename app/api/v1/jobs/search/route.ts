@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client } from '@elastic/elasticsearch';
+import { elasticClient } from '@/backend/lib/elasticsearch';
 import { checkRateLimit, isTokenBlacklisted } from '@/backend/lib/redisSecurity';
-
-const esClient = new Client({
-  node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
-});
 
 const INDEX = 'jobs';
 
@@ -110,7 +106,7 @@ export async function GET(req: NextRequest) {
 
     // ─── Execute Search ───────────────────────────────────────────────────────
     console.log(`[${correlationId}] Đang tìm kiếm trên Elasticsearch với index: ${INDEX}`);
-    const result = await esClient.search({
+    const result = await elasticClient.search({
       index: INDEX,
       from,
       size:  limit,

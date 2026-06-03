@@ -1,3 +1,10 @@
+"""
+FastAPI ML Service — Job Normalization Pipeline
+
+NOTE: This service is NOT used in GitHub Actions CI.
+It is intended for LOCAL development or future production deployment.
+In CI, normalization is handled by fix_khac_offline.py (offline batch mode).
+"""
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
