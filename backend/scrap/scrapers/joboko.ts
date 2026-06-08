@@ -1,6 +1,6 @@
 import { chromium, type Browser, type Page } from 'playwright';
 import { ScraperInterface, ScraperConfig, RawJob } from '../types';
-import { normalizeLocation, CITY_PATTERNS } from '@/backend/elasticsearch/helpers';
+import { normalizeLocation, CITY_PATTERNS } from '../../elasticsearch/helpers';
 
 // ─── Shared Browser Singleton ───────────────────────────────────────────────
 // Dùng lại 1 browser instance cho toàn bộ quá trình kiểm tra job chết.
