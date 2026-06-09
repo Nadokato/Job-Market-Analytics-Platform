@@ -189,7 +189,7 @@ export class JobokoScraper implements ScraperInterface {
       console.log(`Truy cập trang chủ tuyển dụng: ${startUrl}`);
       await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
-      await delay(8000); // Chờ render đầy đủ các tin tuyển dụng động
+      await delay(3000); // Chờ render đầy đủ các tin tuyển dụng động
 
       let allListJobs: any[] = [];
 
@@ -336,7 +336,7 @@ export class JobokoScraper implements ScraperInterface {
             console.log(`Không tìm thấy nút sang trang tiếp theo ở Trang ${currentPage}. Ngưng quét list job.`);
             break;
           }
-          await delay(8000); // Chờ trang mới load
+          await delay(3000); // Chờ trang mới load
         }
       }
 

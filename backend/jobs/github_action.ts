@@ -16,6 +16,35 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Kết nối Supabase bằng Service Role Key (để bypass RLS và có quyền xóa/thêm dữ liệu)
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * Chạy tối đa `limit` tasks cùng lúc (worker pool pattern).
+ * Mỗi worker tự lấy task tiếp theo khi hoàn thành — đảm bảo luôn đúng `limit` concurrent.
+ */
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const currentIndex = index++;
+      try {
+        const value = await tasks[currentIndex]();
+        results[currentIndex] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[currentIndex] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  // Tạo đúng `limit` workers chạy song song, mỗi worker tự lấy task tiếp theo khi xong
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 async function runAllJobs() {
   console.log('=== BẮT ĐẦU CHẠY GITHUB ACTIONS ===');
   
@@ -127,47 +156,58 @@ async function runAllJobs() {
   // -----------------------------------------------------
   // 3. KIỂM TRA TIN N/A
   // -----------------------------------------------------
-  console.log('\n[3/3] Kiểm tra độ sống sót của các tin N/A...');
-  const { data: naJobs, error: errNa } = await supabase.from('jobs').select('url, thong_tin_tuyen_dung');
-  
+  console.log('\n[3/3] Kiểm tra độ sống sót của các tin N/A (song song, 10 URL cùng lúc)...');
+
+  const CONCURRENCY_LIMIT = 10;
+
+  const { data: naJobs, error: errNa } = await supabase
+    .from('jobs')
+    .select('url, thong_tin_tuyen_dung')
+    .eq('thong_tin_tuyen_dung->>het_han_nop', 'N/A'); // Lọc thẳng trên DB
+
   if (errNa) {
     console.error('Lỗi khi fetch jobs N/A:', errNa);
   } else {
+    const urlsToCheck = (naJobs || []).map(j => j.url);
+    console.log(`Tổng số URL N/A cần check: ${urlsToCheck.length}`);
+
     const deadUrls: string[] = [];
-    
-    for (const j of naJobs || []) {
-      const hetHan = j.thong_tin_tuyen_dung?.het_han_nop;
-      if (hetHan === 'N/A') {
-        console.log(`Kiểm tra URL: ${j.url}`);
-        const exists = await checkJobExists(j.url);
-        
-        if (!exists) {
-          console.log(`-> Link đã chết: ${j.url}`);
-          deadUrls.push(j.url);
-        }
+
+    // Tạo danh sách tasks — mỗi task là 1 hàm trả về Promise
+    const tasks = urlsToCheck.map((url) => async () => {
+      const exists = await checkJobExists(url);
+      if (!exists) {
+        console.log(`-> Link đã chết: ${url}`);
+        deadUrls.push(url);
       }
-    }
-    
+      return exists;
+    });
+
+    // Chạy song song với giới hạn 10 concurrent
+    await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+
+    // Đóng shared browser sau khi check xong toàn bộ
+    const { closeSharedBrowser } = await import('../scrap/scrapers/joboko');
+    await closeSharedBrowser();
+
+    // Xóa các URL đã chết
     if (deadUrls.length > 0) {
-      console.log(`Phát hiện ${deadUrls.length} tin N/A đã chết. Đang tiến hành xóa hàng loạt theo lô...`);
-      
+      console.log(`Phát hiện ${deadUrls.length} tin N/A đã chết. Đang tiến hành xóa...`);
       const batchSize = 50;
       let deleteSuccessCount = 0;
       let deleteFailCount = 0;
-      
+
       for (let offset = 0; offset < deadUrls.length; offset += batchSize) {
         const batch = deadUrls.slice(offset, offset + batchSize);
         const { error: deleteErr } = await supabase.from('jobs').delete().in('url', batch);
-        
         if (deleteErr) {
-          console.error(`❌ Lỗi khi xóa lô tin N/A đã chết (offset: ${offset}):`, deleteErr.message);
           deleteFailCount += batch.length;
         } else {
           deleteSuccessCount += batch.length;
         }
       }
-      
-      console.log(`✅ Đã xóa thành công ${deleteSuccessCount} tin N/A không còn khả dụng, thất bại ${deleteFailCount} tin.`);
+
+      console.log(`✅ Đã xóa ${deleteSuccessCount} tin N/A chết, thất bại ${deleteFailCount}.`);
     } else {
       console.log('Không phát hiện tin N/A nào bị chết.');
     }
