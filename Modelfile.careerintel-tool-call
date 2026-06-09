@@ -1,0 +1,4 @@
+FROM qwen2.5:1.5b
+ADAPTER adapter_model.safetensors
+PARAMETER temperature 0.3
+PARAMETER num_ctx 4096

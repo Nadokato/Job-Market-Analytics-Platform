@@ -27,6 +27,7 @@ yarn-error.log*
 # local env files
 .env*.local
 .env.docker
+.env
 
 # vercel
 .vercel
@@ -39,4 +40,13 @@ cv_templates_output/
 chatbot/
 
 # Scraper test output
-scraped_data.json
+scraped_data.json
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# models
+adapter_model.safetensors
