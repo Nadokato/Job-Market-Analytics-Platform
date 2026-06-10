@@ -37,7 +37,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 cv_templates_output/
-chatbot/
+/chatbot/
 
 # Scraper test output
 scraped_data.json
