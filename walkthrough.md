@@ -45,3 +45,4 @@ Check logs of the `next-app` web service:
 docker compose logs next-app
 ```
 Confirm no connection errors.
+vinh bi ngu
